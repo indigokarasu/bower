@@ -91,7 +91,7 @@ Arrival detection runs within the light scan session. It does not spawn a separa
 
 ### Simulation run
 `bower.simulate --path "Folder/Subfolder"`:
-1. Fetch the specified folder and its full contents from the Drive MCP (reads only, no writes).
+1. Fetch the specified folder and its full contents from Google Drive (reads only, no writes).
 2. Read file contents for classification (same rules as deep scan, same content privacy boundary).
 3. Apply the full analysis pipeline: domain logic, generic rules, preference profile, confidence tiers.
 4. Do not write to `proposals.jsonl`, `analysis_events.jsonl`, or any log. Do not write a journal.
@@ -148,7 +148,7 @@ Show "would not move" only for files that are either already correctly placed or
 4. Sort: folder creations → high-confidence moves → high-confidence renames → med/low moves → description overwrites.
 5. Apply `apply_cap`. Mark held proposals `skipped` with `skip_reason: cap_exceeded`.
 6. Per-proposal staleness check immediately before execution.
-7. Execute via Google Drive MCP.
+7. Execute via Google Drive.
 8. On success: update to `executed`, append to `move_log.jsonl`.
 9. On failure: update to `failed`, log error, continue.
 10. If quiet mode off, or if any failure/skip occurred: produce and print apply digest, save to `reports/YYYY-MM-DD-apply.md`.
@@ -159,7 +159,7 @@ Show "would not move" only for files that are either already correctly placed or
 1. Read specified move log records from `move_log.jsonl`.
 2. Per-record staleness check. If the file has moved again since apply, skip and warn.
 3. Restore `previous_value` for renames and description operations.
-4. Execute reversal via MCP.
+4. Execute reversal via Google Drive.
 5. On success: append to `undo_log.jsonl`. Append feedback record for move and rename undos. Trigger pattern demotion if proposal was auto-approved.
 6. On failure: log error, continue.
 7. Write Action Journal.
@@ -225,9 +225,9 @@ Key invariants:
 - Expired proposals marked in `proposals.jsonl`
 - New move, rename, and description proposals appended to `proposals.jsonl` with `status: pending` and `expires_at` set
 
-## Google Drive MCP usage
+## Google Drive access
 
-Bower uses the Google Drive MCP for all Drive operations. Available operations:
+Bower uses Google Drive access for all Drive operations. Available operations:
 - List files and folders (used during scan)
 - Read file content (used during deep scan for content classification and description generation)
 - Move file to folder
@@ -235,11 +235,11 @@ Bower uses the Google Drive MCP for all Drive operations. Available operations:
 - Create folder
 - Update file description field
 
-Bower never calls delete operations. If the MCP exposes a delete operation, Bower must not invoke it under any circumstances.
+Bower never calls delete operations. If a delete operation is available, Bower must not invoke it under any circumstances.
 
-During `bower.scan.deep`, paginate through all files using the MCP list operation. Capture for each file: id, name, mimeType, parents, modifiedTime, starred, size, trashed, description. Exclude trashed files from the structural model.
+During `bower.scan.deep`, paginate through all files. Capture for each file: id, name, mimeType, parents, modifiedTime, starred, size, trashed, description. Exclude trashed files from the structural model.
 
-For every folder in the results, additionally fetch its permissions resource and store the full permission set (direct + inherited) in the structural model. Permission data is required for move proposal generation. If the MCP does not expose permissions, set `permissions_available: false` in the scan event and suppress all move proposals.
+For every folder in the results, additionally fetch its permissions resource and store the full permission set (direct + inherited) in the structural model. Permission data is required for move proposal generation. If permissions are unavailable, set `permissions_available: false` in the scan event and suppress all move proposals.
 
 ## Background tasks
 

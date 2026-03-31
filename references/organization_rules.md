@@ -191,7 +191,7 @@ Overwrite proposals appear in `proposals.jsonl` with `proposal_type: describe_ov
 
 ### Staleness check for overwrites
 
-Before executing a description overwrite, fetch the file's current description from MCP. If it has changed since the proposal was generated, mark the proposal `skipped` with `skip_reason: description_changed`.
+Before executing a description overwrite, fetch the file's current description from Google Drive. If it has changed since the proposal was generated, mark the proposal `skipped` with `skip_reason: description_changed`.
 
 ---
 
@@ -243,7 +243,7 @@ The only exception: if the file itself has explicit permissions that override in
 
 During `bower.scan.deep` and `bower.scan.light`, fetch the `permissions` resource for every folder. Store each folder's effective permission set (direct + all inherited, deduplicated and flattened) in the structural model's `folder_index` keyed by folder ID. This index is the authority for permission comparison during analysis -- do not walk parent chains at analysis time, use the pre-built index.
 
-Permission fetching adds latency. Fetch folder permissions only; skip files that are not folders. If the MCP does not expose a permissions endpoint, set `permissions_available: false` in the scan event record and suppress all move proposals for that scan. Do not generate proposals without permission data.
+Permission fetching adds latency. Fetch folder permissions only; skip files that are not folders. If permissions are unavailable, set `permissions_available: false` in the scan event record and suppress all move proposals for that scan. Do not generate proposals without permission data.
 
 To compare permissions for a proposed move: look up `folder_index[source_parent_id].effective_permissions` and `folder_index[destination_id].effective_permissions`. Compare as sets of `(type, emailAddress|domain, role)` tuples. Any difference blocks the proposal.
 
@@ -290,7 +290,7 @@ During `bower.analyze`, before generating new proposals, scan `proposals.jsonl` 
 
 Before executing any proposal in `bower.apply`, verify the source file is still at its scanned location:
 
-1. Fetch the file's current parent from the Drive MCP using its `source_id`.
+1. Fetch the file's current parent from Google Drive using its `source_id`.
 2. Compare the current parent path to `source_path` in the proposal.
 3. If they differ, mark the proposal `skipped` with `skip_reason: source_moved` and log the discrepancy. Do not execute the move.
 4. Continue with remaining proposals.
@@ -311,7 +311,7 @@ Notify the user how many proposals were held back and how many remain.
 
 At the start of `bower.scan.light`, compare the current Drive state to the existing structural model:
 
-1. Sample up to 200 previously-scanned files by fetching their current parent from the MCP.
+1. Sample up to 200 previously-scanned files by fetching their current parent from Google Drive.
 2. Count how many have a parent that differs from the structural model.
 3. If the drift rate exceeds 15%, abort the light scan. Log `drift_rate` and `abort_reason: drift_threshold_exceeded` to `scan_events.jsonl`. Do not generate proposals.
 4. Notify the user that a deep scan is required before analysis can continue.

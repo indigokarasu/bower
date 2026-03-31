@@ -192,7 +192,7 @@ One record per `bower.analyze` run.
   "expired_count": "number -- pending proposals marked expired this run",
   "content_influenced_count": "number -- proposals where content signal contributed",
   "permission_blocked_count": "number -- moves suppressed due to permission change risk",
-  "permissions_available": "boolean -- false if MCP did not expose permission data; all moves suppressed when false"
+  "permissions_available": "boolean -- false if Drive permission data was unavailable; all moves suppressed when false"
 }
 ```
 

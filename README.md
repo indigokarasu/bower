@@ -54,7 +54,7 @@ Each domain can operate in prescriptive mode (moves toward a canonical structure
 - [Elephas](https://github.com/indigokarasu/elephas) -- may receive folder structure Signals as Chronicle candidates
 
 **External**
-- Google Drive MCP -- required for all Drive operations
+- Google Drive access -- required for all Drive operations
 
 ## Scheduled Tasks
 
