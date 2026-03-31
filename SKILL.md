@@ -337,6 +337,20 @@ Journal path: `~/openclaw/journals/ocas-bower/YYYY-MM-DD/{run_id}.json`
 `auto_approve_precision` -- fraction of auto-approved proposals not subsequently undone; must exceed 0.90 or pattern promotion thresholds tighten.
 `feedback_suppression_rate` -- fraction of potential proposals suppressed by feedback; tracked to detect over-suppression.
 
+## Initialization
+
+`bower.init`:
+
+1. Create `~/openclaw/data/ocas-bower/` and `~/openclaw/journals/ocas-bower/` if not present.
+2. Write `config.json` with defaults including ConfigBase fields
+3. Register cron job `bower:scan` if not already present (check `openclaw cron list` first)
+4. Register cron job `bower:weekly-deep` if not already present
+5. All cron jobs use `sessionTarget: isolated`, `lightContext: true`, `wakeMode: next-heartbeat`
+
+## Update command
+
+`bower.update` — Pull latest release from GitHub. Preserves `~/openclaw/data/ocas-bower/` and journals.
+
 ## Visibility
 
 public
