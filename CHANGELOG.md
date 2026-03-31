@@ -1,3 +1,12 @@
+## [1.3.2] - 2026-03-31
+
+### Added
+- Required SKILL.md sections for OCAS specification compliance
+- Filesystem field in skill.json
+
+### Changed
+- Documentation improvements for better maintainability
+
 # Changelog
 
 ## [1.0.1] - 2026-03-30
