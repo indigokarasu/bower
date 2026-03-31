@@ -28,6 +28,10 @@ Bower does not: delete files, manage sharing permissions, create top-level taxon
 
 Adjacent responsibility: Sift handles web research and document analysis. Elephas handles Chronicle ingestion. Bower is self-contained and does not depend on either.
 
+## Ontology types
+
+- **Thing/DigitalArtifact** — Drive files and folders that Bower scans, classifies, and organizes. Bower may emit Signals to Elephas for newly discovered structural patterns (optional; not primary function).
+
 ## Commands
 
 `bower.scan.deep [--founding]` — Full Drive crawl. With `--founding` flag (first use only): after scan and analysis, presents all high-confidence proposals grouped by domain as a single accept/reject batch. One decision bootstraps pattern promotion immediately. Builds or refreshes the structural model and preference profile. Reads file contents for classification and description generation. Detects domains and infers naming conventions, depth preference, folder density, and sacred folders. Checkpoints every 500 files; resumes automatically if interrupted.
