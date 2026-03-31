@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.1] - 2026-03-30
+
+### Added
+- `## Ontology types` section per authoring rules v2.4.0 (Thing/DigitalArtifact declared)
+
+
 ## [1.0.0] - 2026-03-30
 
 ### Added
