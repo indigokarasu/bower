@@ -26,11 +26,131 @@ Bower does: scan Drive structure and file contents, build a preference profile f
 
 Bower does not: delete files, manage sharing permissions, create top-level taxonomy from scratch (it infers from what exists), interact with any non-Drive storage, apply domain logic to a domain it hasn't detected as clearly started.
 
-Adjacent responsibility: Sift handles web research and document analysis. Elephas handles Chronicle ingestion. Bower is self-contained and does not depend on either.
+Adjacent responsibility: Sift handles web research and document analysis. Elephas handles Chronicle ingestion and receives Bower's entity signals. Bower does not depend on either but emits signals to Elephas for all Drive artifacts and entities encountered during scans.
 
 ## Ontology types
 
-- **Thing/DigitalArtifact** — Drive files and folders that Bower scans, classifies, and organizes. Bower may emit Signals to Elephas for newly discovered structural patterns (optional; not primary function).
+- **Thing/DigitalArtifact** — Drive files and folders that Bower scans, classifies, and organizes. Bower emits Signals to Elephas for all discovered Drive artifacts.
+- **Entity/Person** — People referenced in documents, shared-with metadata, and collaborators encountered during scans.
+- **Place** — Locations found in documents (travel documents, address lists, venue information).
+- **Concept/Event** — Events, projects, or topics that documents are about (e.g., a folder of wedding planning docs, a project kickoff deck).
+- **Concept/Idea** — Themes and topics reflected by folder structure and document content (e.g., recurring interest in machine learning across multiple folders).
+
+## Signal emission to Elephas
+
+Bower emits structured signals to Elephas for all entities and artifacts encountered during scans. Drive content is inherently user-owned -- the user put it there, organized it, and chose to keep it -- so all signals are emitted with `user_relevance: "user"`.
+
+Signal files are written to `~/openclaw/db/ocas-elephas/intake/{signal_id}.signal.json`. Bower writes signals during `bower.scan.deep` and `bower.scan.light` as entities are encountered. Duplicate signals for the same Drive artifact are deduplicated by `file_id`; Bower updates the existing signal rather than creating a new one when metadata changes (e.g., last modified date, sharing status).
+
+### Signal types emitted
+
+- **Thing/DigitalArtifact** — One signal per document, spreadsheet, presentation, PDF, image, or other file. Includes file type, MIME type, Drive path, last modified timestamp, sharing status, and content summary.
+- **Entity/Person** — One signal per unique person encountered across shared-with metadata, document mentions, and collaborator lists. Deduplicated by email address.
+- **Place** — One signal per location found in document content (travel itineraries, address lists, venue info, property documents).
+- **Concept/Event** — One signal per event or project detected from document clusters (e.g., a folder of wedding documents, a project with multiple deliverables).
+- **Concept/Idea** — One signal per theme or topic reflected by folder structure and document content patterns (e.g., sustained interest in cooking across recipe folders, research into home renovation).
+
+### Signal schema examples
+
+**Thing/DigitalArtifact signal:**
+
+```json
+{
+  "id": "sig_{uuid7}",
+  "source_skill": "ocas-bower",
+  "source_type": "intake",
+  "source_journal_type": null,
+  "payload": {
+    "proposed_type": "Thing",
+    "thing_type": "DigitalArtifact",
+    "name": "Q1 2026 Budget.xlsx",
+    "metadata": "{\"file_id\": \"gdrive_abc123\", \"mime_type\": \"application/vnd.google-apps.spreadsheet\", \"path\": \"Finance/Budgets/\", \"last_modified\": \"2026-03-15T10:00:00Z\", \"shared_with\": [\"sarah@example.com\"]}"
+  },
+  "user_relevance": "user",
+  "timestamp": "2026-03-17T10:00:04-07:00",
+  "status": "active"
+}
+```
+
+**Entity/Person signal:**
+
+```json
+{
+  "id": "sig_{uuid7}",
+  "source_skill": "ocas-bower",
+  "source_type": "intake",
+  "source_journal_type": null,
+  "payload": {
+    "proposed_type": "Entity",
+    "thing_type": "Person",
+    "name": "Sarah Chen",
+    "metadata": "{\"email\": \"sarah@example.com\", \"relationship\": \"collaborator\", \"shared_files_count\": 12, \"domains\": [\"Finance\", \"Projects\"], \"last_seen\": \"2026-03-15T10:00:00Z\"}"
+  },
+  "user_relevance": "user",
+  "timestamp": "2026-03-17T10:00:04-07:00",
+  "status": "active"
+}
+```
+
+**Place signal:**
+
+```json
+{
+  "id": "sig_{uuid7}",
+  "source_skill": "ocas-bower",
+  "source_type": "intake",
+  "source_journal_type": null,
+  "payload": {
+    "proposed_type": "Place",
+    "thing_type": null,
+    "name": "Portland Convention Center",
+    "metadata": "{\"source_file\": \"gdrive_def456\", \"source_path\": \"Travel/Conferences/\", \"context\": \"venue for PyCon 2026\", \"address\": \"777 NE MLK Jr Blvd, Portland, OR 97232\"}"
+  },
+  "user_relevance": "user",
+  "timestamp": "2026-03-17T10:00:04-07:00",
+  "status": "active"
+}
+```
+
+**Concept/Event signal:**
+
+```json
+{
+  "id": "sig_{uuid7}",
+  "source_skill": "ocas-bower",
+  "source_type": "intake",
+  "source_journal_type": null,
+  "payload": {
+    "proposed_type": "Concept",
+    "thing_type": "Event",
+    "name": "Kitchen Renovation 2026",
+    "metadata": "{\"source_files\": [\"gdrive_ghi789\", \"gdrive_jkl012\"], \"source_path\": \"Home/Renovation/Kitchen/\", \"file_count\": 8, \"date_range\": \"2026-01 to 2026-03\"}"
+  },
+  "user_relevance": "user",
+  "timestamp": "2026-03-17T10:00:04-07:00",
+  "status": "active"
+}
+```
+
+**Concept/Idea signal:**
+
+```json
+{
+  "id": "sig_{uuid7}",
+  "source_skill": "ocas-bower",
+  "source_type": "intake",
+  "source_journal_type": null,
+  "payload": {
+    "proposed_type": "Concept",
+    "thing_type": "Idea",
+    "name": "Machine Learning",
+    "metadata": "{\"evidence_folders\": [\"Projects/ML-Research/\", \"Education/Coursera/\", \"Projects/DataPipeline/\"], \"evidence_file_count\": 34, \"domains\": [\"Projects\", \"Education\"], \"first_seen\": \"2025-06-12T00:00:00Z\"}"
+  },
+  "user_relevance": "user",
+  "timestamp": "2026-03-17T10:00:04-07:00",
+  "status": "active"
+}
+```
 
 ## Commands
 
@@ -272,23 +392,30 @@ Vesper decides whether to include it in the weekly briefing. Bower emits it rega
 Bower may cooperate with these skills when present but never depends on them:
 
 - **Vesper** -- Bower emits a weekly Drive health InsightProposal to Vesper's intake directory after each Sunday deep scan. Vesper decides whether to surface it. If Vesper is absent, the signal is dropped silently.
-- **Elephas** -- Bower may emit Signals for newly discovered folder structures or naming patterns as Chronicle candidates. Optional.
+- **Elephas** -- Bower emits structured signals for all Drive artifacts and entities encountered during scans. Elephas consumes these signals from `~/openclaw/db/ocas-elephas/intake/` to build the user's Chronicle. Signal types include Thing/DigitalArtifact, Entity/Person, Place, Concept/Event, and Concept/Idea. All signals carry `user_relevance: "user"` because Drive content is inherently user-owned. If Elephas is absent, signal files accumulate in the intake directory until Elephas processes them.
 - **Mentor** -- Bower's journals are evaluated by Mentor for OKR scoring. No action required from Bower.
 
 ## Inter-skill interfaces
 
 Bower emits to:
 - `~/openclaw/data/ocas-vesper/intake/{proposal_id}.json` -- weekly Drive health InsightProposal (Sunday deep scan only)
+- `~/openclaw/db/ocas-elephas/intake/{signal_id}.signal.json` -- entity and artifact signals for all Drive content encountered during scans (every scan)
 
 Bower receives from: none.
 
 ## Journal outputs
 
-`bower.scan.deep` and `bower.scan.light` emit **Observation Journals** -- no external side effects.
+`bower.scan.deep` and `bower.scan.light` emit **Observation Journals** -- no external side effects (signal writes to Elephas intake are considered observation-level output, not actions).
 
 `bower.analyze` emits an **Observation Journal** -- no external side effects.
 
 `bower.apply` and `bower.undo` emit **Action Journals** -- external side effects (file moves, renames, description writes) occurred.
+
+All Observation Journals from scan commands include `entities_observed`, `relationships_observed`, and `preferences_observed` in `decision.payload` for all entities encountered during the scan:
+
+- `entities_observed` — list of entities discovered or updated during the scan, with type and signal ID (e.g., `{"type": "Thing/DigitalArtifact", "name": "Q1 2026 Budget.xlsx", "signal_id": "sig_..."}`)
+- `relationships_observed` — list of relationships between entities (e.g., `{"subject": "Sarah Chen", "predicate": "collaborates_on", "object": "Q1 2026 Budget.xlsx"}`)
+- `preferences_observed` — list of user preferences inferred from Drive structure (e.g., `{"preference": "year_subfolder_convention", "domain": "Finance", "confidence": "high"}`)
 
 Journal path: `~/openclaw/journals/ocas-bower/YYYY-MM-DD/{run_id}.json`
 
@@ -313,6 +440,9 @@ Journal path: `~/openclaw/journals/ocas-bower/YYYY-MM-DD/{run_id}.json`
 
 ~/openclaw/journals/ocas-bower/
   YYYY-MM-DD/{run_id}.json
+
+~/openclaw/db/ocas-elephas/intake/
+  {signal_id}.signal.json          -- Elephas intake signals (written by Bower, consumed by Elephas)
 ```
 
 ## OKR targets
@@ -341,7 +471,7 @@ Journal path: `~/openclaw/journals/ocas-bower/YYYY-MM-DD/{run_id}.json`
 
 `bower.init`:
 
-1. Create `~/openclaw/data/ocas-bower/` and `~/openclaw/journals/ocas-bower/` if not present.
+1. Create `~/openclaw/data/ocas-bower/`, `~/openclaw/journals/ocas-bower/`, and `~/openclaw/db/ocas-elephas/intake/` if not present.
 2. Write `config.json` with defaults including ConfigBase fields
 3. Register cron job `bower:scan` if not already present (check `openclaw cron list` first)
 4. Register cron job `bower:weekly-deep` if not already present

@@ -9,6 +9,15 @@
 
 # Changelog
 
+## [1.1.0] - 2026-04-02
+
+### Added
+- Full signal emission to Elephas for Drive artifacts (Thing/DigitalArtifact, Entity/Person, Place, Concept/Event, Concept/Idea)
+- All emitted signals carry `user_relevance: "user"` — Drive content is inherently user-owned
+- Structured entity observations in journal payloads (`entities_observed`, `relationships_observed`, `preferences_observed`)
+- Filesystem write permission for Elephas intake directory
+- Elephas signal cooperation documented in skill cooperation section
+
 ## [1.0.1] - 2026-03-30
 
 ### Added

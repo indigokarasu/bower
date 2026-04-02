@@ -1,6 +1,6 @@
 {
   "name": "ocas-bower",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Bower: automatic Google Drive organizer. Scans Drive structure and file contents, builds a personalized preference profile, applies domain-specific logic (taxes by year, projects by name, home by system, finance by institution, etc.), and executes non-destructive moves, renames, and description writes in the background. Learns your organizational style over time and auto-approves patterns you've consistently accepted. Never deletes files. Trigger phrases: 'organize my Drive', 'clean up my Google Drive', 'what's disorganized in my Drive', 'show me what Bower found', 'run a Drive scan', 'apply the pending Bower proposals'. Do not use for web research (use Sift), document analysis (use Sift), or Chronicle ingestion (use Elephas).",
   "author": "Indigo Karasu",
   "email": "mx.indigo.karasu@gmail.com",
@@ -8,12 +8,14 @@
   "filesystem": {
     "read": [
       "~/openclaw/data/ocas-bower/",
-      "~/openclaw/journals/ocas-bower/"
+      "~/openclaw/journals/ocas-bower/",
+      "~/openclaw/db/ocas-elephas/intake/"
     ],
     "write": [
       "~/openclaw/data/ocas-bower/",
       "~/openclaw/journals/ocas-bower/",
-      "~/openclaw/data/ocas-vesper/intake/"
+      "~/openclaw/data/ocas-vesper/intake/",
+      "~/openclaw/db/ocas-elephas/intake/"
     ]
   },
   "self_update": {
