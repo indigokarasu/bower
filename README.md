@@ -75,6 +75,13 @@ Each domain can operate in prescriptive mode (moves toward a canonical structure
 
 ## Changelog
 
+### v1.1.0 -- April 2, 2026
+- Full signal emission to Elephas for Drive artifacts (Thing/DigitalArtifact, Entity/Person, Place, Concept/Event, Concept/Idea)
+- All emitted signals carry `user_relevance: "user"` — Drive content is inherently user-owned
+- Structured entity observations in journal payloads (`entities_observed`, `relationships_observed`, `preferences_observed`)
+- Filesystem write permission for Elephas intake directory
+- Elephas signal cooperation documented in skill cooperation section
+
 ### v1.0.0 -- March 30, 2026
 - Initial release with full scan, analyze, simulate, apply, and undo lifecycle
 - Domain support for Taxes, Projects, Home, Finance, Legal, Medical, Archive, Education
