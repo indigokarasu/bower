@@ -1,3 +1,18 @@
+## [2026-04-04] Spec Compliance Update
+
+### Changes
+- Added missing SKILL.md sections per ocas-skill-authoring-rules.md
+- Updated skill.json with required metadata fields
+- Ensured all storage layouts and journal paths are properly declared
+- Aligned ontology and background task declarations with spec-ocas-ontology.md
+
+### Validation
+- ✓ All required SKILL.md sections present
+- ✓ All skill.json fields complete
+- ✓ Storage layout properly declared
+- ✓ Journal output paths configured
+- ✓ Version: 1.1.0 → 1.1.1
+
 ## [1.3.2] - 2026-03-31
 
 ### Added
