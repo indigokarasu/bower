@@ -445,7 +445,28 @@ Journal path: `~/openclaw/journals/ocas-bower/YYYY-MM-DD/{run_id}.json`
   {signal_id}.signal.json          -- Elephas intake signals (written by Bower, consumed by Elephas)
 ```
 
-## OKR targets
+## OKRs
+
+Universal OKRs from spec-ocas-journal.md apply to all runs.
+
+```yaml
+skill_okrs:
+  - name: proposal_precision
+    metric: fraction of executed proposals not subsequently undone
+    direction: maximize
+    target: 0.80
+    evaluation_window: 30_runs
+  - name: apply_success_rate
+    metric: fraction of approved proposals successfully applied
+    direction: maximize
+    target: 0.95
+    evaluation_window: 30_runs
+  - name: auto_approve_precision
+    metric: fraction of auto-approved proposals not subsequently undone
+    direction: maximize
+    target: 0.90
+    evaluation_window: 30_runs
+```
 
 | Metric | Target | Direction |
 |--------|--------|-----------|

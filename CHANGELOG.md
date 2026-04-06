@@ -1,3 +1,12 @@
+## [1.1.2] - 2026-04-06
+
+### Added
+- OKRs section in SKILL.md with formal OKR definitions for skill evaluation
+- YAML-formatted skill_okrs with metrics, targets, and evaluation windows
+
+### Fixed
+- Renamed "## OKR targets" to "## OKRs" for consistency with spec-ocas-skill-authoring-rules.md
+
 ## [2026-04-04] Spec Compliance Update
 
 ### Changes
