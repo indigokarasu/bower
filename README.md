@@ -82,7 +82,7 @@ Each domain can operate in prescriptive mode (moves toward a canonical structure
 - Full signal emission to Elephas for Drive artifacts (Thing/DigitalArtifact, Entity/Person, Place, Concept/Event, Concept/Idea)
 - All emitted signals carry `user_relevance: "user"` — Drive content is inherently user-owned
 - Structured entity observations in journal payloads (`entities_observed`, `relationships_observed`, `preferences_observed`)
-- Filesystem write permission for Elephas intake directory
+- Filesystem write permission for Elephas journal payload
 - Elephas signal cooperation documented in skill cooperation section
 
 ### v1.0.0 -- March 30, 2026
