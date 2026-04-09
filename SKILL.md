@@ -14,7 +14,7 @@ description: >
 metadata:
   author: Indigo Karasu
   email: mx.indigo.karasu@gmail.com
-  version: "1.2.0"
+  version: "1.2.1"
   hermes:
     tags: [organization, google-drive, files]
     category: interface
@@ -30,14 +30,11 @@ metadata:
     visibility: public
     filesystem:
       read:
-        - "$OCAS_DATA_ROOT/data/ocas-bower/"
-        - "$OCAS_DATA_ROOT/journals/ocas-bower/"
-        - "$OCAS_DATA_ROOT/db/ocas-elephas/intake/"
+        - "{agent_root}/commons/data/ocas-bower/"
+        - "{agent_root}/commons/journals/ocas-bower/"
       write:
-        - "$OCAS_DATA_ROOT/data/ocas-bower/"
-        - "$OCAS_DATA_ROOT/journals/ocas-bower/"
-        - "$OCAS_DATA_ROOT/data/ocas-vesper/intake/"
-        - "$OCAS_DATA_ROOT/db/ocas-elephas/intake/"
+        - "{agent_root}/commons/data/ocas-bower/"
+        - "{agent_root}/commons/journals/ocas-bower/"
     self_update:
       source: "https://github.com/indigokarasu/bower"
       mechanism: "version-checked tarball from GitHub via gh CLI"
@@ -88,7 +85,7 @@ Adjacent responsibility: Sift handles web research and document analysis. Elepha
 
 Bower emits structured signals to Elephas for all entities and artifacts encountered during scans. Drive content is inherently user-owned -- the user put it there, organized it, and chose to keep it -- so all signals are emitted with `user_relevance: "user"`.
 
-Signal files are written to `$OCAS_DATA_ROOT/db/ocas-elephas/intake/{signal_id}.signal.json`. Bower writes signals during `bower.scan.deep` and `bower.scan.light` as entities are encountered. Duplicate signals for the same Drive artifact are deduplicated by `file_id`; Bower updates the existing signal rather than creating a new one when metadata changes (e.g., last modified date, sharing status).
+Signal files are written to the `signal` payload field in the journal entry. Bower writes signals during `bower.scan.deep` and `bower.scan.light` as entities are encountered. Duplicate signals for the same Drive artifact are deduplicated by `file_id`; Bower updates the existing signal rather than creating a new one when metadata changes (e.g., last modified date, sharing status).
 
 ### Signal types emitted
 
@@ -106,7 +103,7 @@ Signal files are written to `$OCAS_DATA_ROOT/db/ocas-elephas/intake/{signal_id}.
 {
   "id": "sig_{uuid7}",
   "source_skill": "ocas-bower",
-  "source_type": "intake",
+  "source_type": "journal",
   "source_journal_type": null,
   "payload": {
     "proposed_type": "Thing",
@@ -126,7 +123,7 @@ Signal files are written to `$OCAS_DATA_ROOT/db/ocas-elephas/intake/{signal_id}.
 {
   "id": "sig_{uuid7}",
   "source_skill": "ocas-bower",
-  "source_type": "intake",
+  "source_type": "journal",
   "source_journal_type": null,
   "payload": {
     "proposed_type": "Entity",
@@ -146,7 +143,7 @@ Signal files are written to `$OCAS_DATA_ROOT/db/ocas-elephas/intake/{signal_id}.
 {
   "id": "sig_{uuid7}",
   "source_skill": "ocas-bower",
-  "source_type": "intake",
+  "source_type": "journal",
   "source_journal_type": null,
   "payload": {
     "proposed_type": "Place",
@@ -166,7 +163,7 @@ Signal files are written to `$OCAS_DATA_ROOT/db/ocas-elephas/intake/{signal_id}.
 {
   "id": "sig_{uuid7}",
   "source_skill": "ocas-bower",
-  "source_type": "intake",
+  "source_type": "journal",
   "source_journal_type": null,
   "payload": {
     "proposed_type": "Concept",
@@ -186,7 +183,7 @@ Signal files are written to `$OCAS_DATA_ROOT/db/ocas-elephas/intake/{signal_id}.
 {
   "id": "sig_{uuid7}",
   "source_skill": "ocas-bower",
-  "source_type": "intake",
+  "source_type": "journal",
   "source_journal_type": null,
   "payload": {
     "proposed_type": "Concept",
@@ -426,7 +423,7 @@ All cron jobs use `sessionTarget: isolated`, `lightContext: true`, `wakeMode: ne
 
 ### Vesper Drive health signal
 
-Emitted once per week after the Sunday deep scan. Written to the Vesper intake directory per `spec-ocas-interfaces.md`. Format: an InsightProposal with `proposal_type: routine_prediction` containing:
+Emitted once per week after the Sunday deep scan. Written to the Vesper journal payload per `spec-ocas-interfaces.md`. Format: an InsightProposal with `proposal_type: routine_prediction` containing:
 - Drive health score this week vs. last week (delta)
 - Files organized in the past 7 days (count)
 - Active auto-approved patterns (count)
@@ -439,21 +436,21 @@ Vesper decides whether to include it in the weekly briefing. Bower emits it rega
 
 Bower may cooperate with these skills when present but never depends on them:
 
-- **Vesper** -- Bower emits a weekly Drive health InsightProposal to Vesper's intake directory after each Sunday deep scan. Vesper decides whether to surface it. If Vesper is absent, the signal is dropped silently.
-- **Elephas** -- Bower emits structured signals for all Drive artifacts and entities encountered during scans. Elephas consumes these signals from `$OCAS_DATA_ROOT/db/ocas-elephas/intake/` to build the user's Chronicle. Signal types include Thing/DigitalArtifact, Entity/Person, Place, Concept/Event, and Concept/Idea. All signals carry `user_relevance: "user"` because Drive content is inherently user-owned. If Elephas is absent, signal files accumulate in the intake directory until Elephas processes them.
+- **Vesper** -- Bower emits a weekly Drive health InsightProposal to Vesper's journal payload after each Sunday deep scan. Vesper decides whether to surface it. If Vesper is absent, the signal is dropped silently.
+- **Elephas** -- Bower emits structured signals for all Drive artifacts and entities encountered during scans. Elephas consumes these signals from journal payload fields (see interfaces specification) to build the user's Chronicle. Signal types include Thing/DigitalArtifact, Entity/Person, Place, Concept/Event, and Concept/Idea. All signals carry `user_relevance: "user"` because Drive content is inherently user-owned. If Elephas is absent, signal files accumulate in the journal payload until Elephas processes them.
 - **Mentor** -- Bower's journals are evaluated by Mentor for OKR scoring. No action required from Bower.
 
 ## Inter-skill interfaces
 
 Bower emits to:
-- `$OCAS_DATA_ROOT/data/ocas-vesper/intake/{proposal_id}.json` -- weekly Drive health InsightProposal (Sunday deep scan only)
-- `$OCAS_DATA_ROOT/db/ocas-elephas/intake/{signal_id}.signal.json` -- entity and artifact signals for all Drive content encountered during scans (every scan)
+- the `briefing` payload field in the journal entry -- weekly Drive health InsightProposal (Sunday deep scan only)
+- the `signal` payload field in the journal entry -- entity and artifact signals for all Drive content encountered during scans (every scan)
 
 Bower receives from: none.
 
 ## Journal outputs
 
-`bower.scan.deep` and `bower.scan.light` emit **Observation Journals** -- no external side effects (signal writes to Elephas intake are considered observation-level output, not actions).
+`bower.scan.deep` and `bower.scan.light` emit **Observation Journals** -- no external side effects (signal writes to Elephas (via journal signal payload) are considered observation-level output, not actions).
 
 `bower.analyze` emits an **Observation Journal** -- no external side effects.
 
@@ -465,12 +462,12 @@ All Observation Journals from scan commands include `entities_observed`, `relati
 - `relationships_observed` — list of relationships between entities (e.g., `{"subject": "Sarah Chen", "predicate": "collaborates_on", "object": "Q1 2026 Budget.xlsx"}`)
 - `preferences_observed` — list of user preferences inferred from Drive structure (e.g., `{"preference": "year_subfolder_convention", "domain": "Finance", "confidence": "high"}`)
 
-Journal path: `$OCAS_DATA_ROOT/journals/ocas-bower/YYYY-MM-DD/{run_id}.json`
+Journal path: `{agent_root}/commons/journals/ocas-bower/YYYY-MM-DD/{run_id}.json`
 
 ## Storage layout
 
 ```
-$OCAS_DATA_ROOT/data/ocas-bower/
+{agent_root}/commons/data/ocas-bower/
   config.json
   structural_model.json       -- current Drive tree with folder_index (overwritten each deep scan)
   preference_profile.json     -- inferred preferences, domains, patterns, class precision (updated each deep scan)
@@ -486,11 +483,11 @@ $OCAS_DATA_ROOT/data/ocas-bower/
   staging/
     scan_checkpoint.json      -- deep scan resume checkpoint (deleted on completion)
 
-$OCAS_DATA_ROOT/journals/ocas-bower/
+{agent_root}/commons/journals/ocas-bower/
   YYYY-MM-DD/{run_id}.json
 
-$OCAS_DATA_ROOT/db/ocas-elephas/intake/
-  {signal_id}.signal.json          -- Elephas intake signals (written by Bower, consumed by Elephas)
+journal payload fields
+  {signal_id}.signal.json          -- Elephas (via journal signal payload) signals (written by Bower, consumed by Elephas)
 ```
 
 ## OKRs
@@ -540,7 +537,7 @@ skill_okrs:
 
 `bower.init`:
 
-1. Create `$OCAS_DATA_ROOT/data/ocas-bower/`, `$OCAS_DATA_ROOT/journals/ocas-bower/`, and `$OCAS_DATA_ROOT/db/ocas-elephas/intake/` if not present.
+1. Create `{agent_root}/commons/data/ocas-bower/`, `{agent_root}/commons/journals/ocas-bower/`, and journal payload fields (see interfaces specification) if not present.
 2. Write `config.json` with defaults including ConfigBase fields
 3. Register cron job `bower:scan` if not already present (check the platform scheduling registry first)
 4. Register cron job `bower:weekly-deep` if not already present
@@ -548,7 +545,7 @@ skill_okrs:
 
 ## Update command
 
-`bower.update` — Pull latest release from GitHub. Preserves `$OCAS_DATA_ROOT/data/ocas-bower/` and journals.
+`bower.update` — Pull latest release from GitHub. Preserves `{agent_root}/commons/data/ocas-bower/` and journals.
 
 ## Visibility
 

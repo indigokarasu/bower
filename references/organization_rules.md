@@ -6,7 +6,7 @@ Rules Bower applies when analyzing Drive structure and generating proposals.
 
 ## Preference inference
 
-During `bower.scan.deep`, Bower builds a preference profile from evidence in the existing structure. Written to `$OCAS_DATA_ROOT/data/ocas-bower/preference_profile.json` and updated on every deep scan. Human-readable; the user may edit it directly. Any field marked `locked: true` is treated as immutable and never overwritten by inference.
+During `bower.scan.deep`, Bower builds a preference profile from evidence in the existing structure. Written to `{agent_root}/commons/data/ocas-bower/preference_profile.json` and updated on every deep scan. Human-readable; the user may edit it directly. Any field marked `locked: true` is treated as immutable and never overwritten by inference.
 
 The profile captures:
 
@@ -378,7 +378,7 @@ Large drives can take 30+ minutes to scan. If `bower.scan.deep` is interrupted (
 
 ### Checkpoint behavior
 
-Every 500 files processed, write a checkpoint to `$OCAS_DATA_ROOT/data/ocas-bower/staging/scan_checkpoint.json`. See `analysis_schema.md` for the checkpoint schema.
+Every 500 files processed, write a checkpoint to `{agent_root}/commons/data/ocas-bower/staging/scan_checkpoint.json`. See `analysis_schema.md` for the checkpoint schema.
 
 On `bower.scan.deep` start:
 1. Check for an existing `scan_checkpoint.json`.
@@ -404,7 +404,7 @@ If either cap is hit, notify the user with the exact counts: "Applied N moves/re
 
 ## Apply digest
 
-After every `bower.apply` run, produce a human-readable digest summarizing what was done. The digest is printed to the user and appended to `$OCAS_DATA_ROOT/data/ocas-bower/reports/` as a dated Markdown file.
+After every `bower.apply` run, produce a human-readable digest summarizing what was done. The digest is printed to the user and appended to `{agent_root}/commons/data/ocas-bower/reports/` as a dated Markdown file.
 
 ### Digest format
 
@@ -488,7 +488,7 @@ Files arriving in a sacred folder: skip arrival detection. Do not disturb sacred
 
 `bower.simulate` is a pure read operation. These rules are absolute:
 
-- No writes to any file under `$OCAS_DATA_ROOT/`.
+- No writes to any file under `{agent_root}/commons/`.
 - No journal written.
 - No proposals appended to `proposals.jsonl`.
 - No analysis events appended.
