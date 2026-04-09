@@ -1,7 +1,55 @@
 ---
 name: ocas-bower
-description: Automatically organizes Google Drive by scanning its full structure and file contents, building a personalized preference profile, applying domain-specific logic (taxes by year, projects by name, home by system, finance by institution, etc.), and executing non-destructive moves, renames, and description writes in the background. Learns your organizational style over time and auto-approves patterns you've consistently accepted. Never deletes files. Always requires approval before applying changes unless a pattern has been promoted.
-metadata: {"openclaw":{"emoji":"🪺"}}
+description: >
+  Bower: automatic Google Drive organizer. Scans Drive structure and file
+  contents, builds a personalized preference profile, applies domain-specific
+  logic (taxes by year, projects by name, home by system, finance by
+  institution, etc.), and executes non-destructive moves, renames, and
+  description writes in the background. Learns your organizational style over
+  time and auto-approves patterns you've consistently accepted. Never deletes
+  files. Trigger phrases: 'organize my Drive', 'clean up my Google Drive',
+  'what's disorganized in my Drive', 'show me what Bower found', 'run a Drive
+  scan', 'apply the pending Bower proposals'. Do not use for web research (use
+  Sift), document analysis (use Sift), or Chronicle ingestion (use Elephas).
+metadata:
+  author: Indigo Karasu
+  email: mx.indigo.karasu@gmail.com
+  version: "1.2.0"
+  hermes:
+    tags: [organization, google-drive, files]
+    category: interface
+    cron:
+      - name: "bower:scan"
+        schedule: "0 2 * * *"
+        command: "bower.scan.light"
+      - name: "bower:weekly-deep"
+        schedule: "0 1 * * 0"
+        command: "bower.scan.deep"
+  openclaw:
+    skill_type: system
+    visibility: public
+    filesystem:
+      read:
+        - "$OCAS_DATA_ROOT/data/ocas-bower/"
+        - "$OCAS_DATA_ROOT/journals/ocas-bower/"
+        - "$OCAS_DATA_ROOT/db/ocas-elephas/intake/"
+      write:
+        - "$OCAS_DATA_ROOT/data/ocas-bower/"
+        - "$OCAS_DATA_ROOT/journals/ocas-bower/"
+        - "$OCAS_DATA_ROOT/data/ocas-vesper/intake/"
+        - "$OCAS_DATA_ROOT/db/ocas-elephas/intake/"
+    self_update:
+      source: "https://github.com/indigokarasu/bower"
+      mechanism: "version-checked tarball from GitHub via gh CLI"
+      command: "bower.update"
+      requires_binaries: [gh, tar, python3]
+    cron:
+      - name: "bower:scan"
+        schedule: "0 2 * * *"
+        command: "bower.scan.light"
+      - name: "bower:weekly-deep"
+        schedule: "0 1 * * 0"
+        command: "bower.scan.deep"
 ---
 
 # Bower
@@ -40,7 +88,7 @@ Adjacent responsibility: Sift handles web research and document analysis. Elepha
 
 Bower emits structured signals to Elephas for all entities and artifacts encountered during scans. Drive content is inherently user-owned -- the user put it there, organized it, and chose to keep it -- so all signals are emitted with `user_relevance: "user"`.
 
-Signal files are written to `~/openclaw/db/ocas-elephas/intake/{signal_id}.signal.json`. Bower writes signals during `bower.scan.deep` and `bower.scan.light` as entities are encountered. Duplicate signals for the same Drive artifact are deduplicated by `file_id`; Bower updates the existing signal rather than creating a new one when metadata changes (e.g., last modified date, sharing status).
+Signal files are written to `$OCAS_DATA_ROOT/db/ocas-elephas/intake/{signal_id}.signal.json`. Bower writes signals during `bower.scan.deep` and `bower.scan.light` as entities are encountered. Duplicate signals for the same Drive artifact are deduplicated by `file_id`; Bower updates the existing signal rather than creating a new one when metadata changes (e.g., last modified date, sharing status).
 
 ### Signal types emitted
 
@@ -372,7 +420,7 @@ For every folder in the results, additionally fetch its permissions resource and
 | `bower:scan` | cron | Daily at 02:00 PT | `bower.scan.light` → arrival detection → auto-apply promoted matches if quiet mode on |
 | `bower:weekly-deep` | cron | Sunday at 01:00 PT | `bower.scan.deep` → `bower.analyze` → emit Drive health signal to Vesper |
 
-Register during `bower.init`. Check for existing jobs with `openclaw cron list` before registering to avoid duplicates.
+Register during `bower.init`. Check for existing scheduled tasks in the platform registry before registering to avoid duplicates.
 
 All cron jobs use `sessionTarget: isolated`, `lightContext: true`, `wakeMode: next-heartbeat`.
 
@@ -392,14 +440,14 @@ Vesper decides whether to include it in the weekly briefing. Bower emits it rega
 Bower may cooperate with these skills when present but never depends on them:
 
 - **Vesper** -- Bower emits a weekly Drive health InsightProposal to Vesper's intake directory after each Sunday deep scan. Vesper decides whether to surface it. If Vesper is absent, the signal is dropped silently.
-- **Elephas** -- Bower emits structured signals for all Drive artifacts and entities encountered during scans. Elephas consumes these signals from `~/openclaw/db/ocas-elephas/intake/` to build the user's Chronicle. Signal types include Thing/DigitalArtifact, Entity/Person, Place, Concept/Event, and Concept/Idea. All signals carry `user_relevance: "user"` because Drive content is inherently user-owned. If Elephas is absent, signal files accumulate in the intake directory until Elephas processes them.
+- **Elephas** -- Bower emits structured signals for all Drive artifacts and entities encountered during scans. Elephas consumes these signals from `$OCAS_DATA_ROOT/db/ocas-elephas/intake/` to build the user's Chronicle. Signal types include Thing/DigitalArtifact, Entity/Person, Place, Concept/Event, and Concept/Idea. All signals carry `user_relevance: "user"` because Drive content is inherently user-owned. If Elephas is absent, signal files accumulate in the intake directory until Elephas processes them.
 - **Mentor** -- Bower's journals are evaluated by Mentor for OKR scoring. No action required from Bower.
 
 ## Inter-skill interfaces
 
 Bower emits to:
-- `~/openclaw/data/ocas-vesper/intake/{proposal_id}.json` -- weekly Drive health InsightProposal (Sunday deep scan only)
-- `~/openclaw/db/ocas-elephas/intake/{signal_id}.signal.json` -- entity and artifact signals for all Drive content encountered during scans (every scan)
+- `$OCAS_DATA_ROOT/data/ocas-vesper/intake/{proposal_id}.json` -- weekly Drive health InsightProposal (Sunday deep scan only)
+- `$OCAS_DATA_ROOT/db/ocas-elephas/intake/{signal_id}.signal.json` -- entity and artifact signals for all Drive content encountered during scans (every scan)
 
 Bower receives from: none.
 
@@ -417,12 +465,12 @@ All Observation Journals from scan commands include `entities_observed`, `relati
 - `relationships_observed` — list of relationships between entities (e.g., `{"subject": "Sarah Chen", "predicate": "collaborates_on", "object": "Q1 2026 Budget.xlsx"}`)
 - `preferences_observed` — list of user preferences inferred from Drive structure (e.g., `{"preference": "year_subfolder_convention", "domain": "Finance", "confidence": "high"}`)
 
-Journal path: `~/openclaw/journals/ocas-bower/YYYY-MM-DD/{run_id}.json`
+Journal path: `$OCAS_DATA_ROOT/journals/ocas-bower/YYYY-MM-DD/{run_id}.json`
 
 ## Storage layout
 
 ```
-~/openclaw/data/ocas-bower/
+$OCAS_DATA_ROOT/data/ocas-bower/
   config.json
   structural_model.json       -- current Drive tree with folder_index (overwritten each deep scan)
   preference_profile.json     -- inferred preferences, domains, patterns, class precision (updated each deep scan)
@@ -438,10 +486,10 @@ Journal path: `~/openclaw/journals/ocas-bower/YYYY-MM-DD/{run_id}.json`
   staging/
     scan_checkpoint.json      -- deep scan resume checkpoint (deleted on completion)
 
-~/openclaw/journals/ocas-bower/
+$OCAS_DATA_ROOT/journals/ocas-bower/
   YYYY-MM-DD/{run_id}.json
 
-~/openclaw/db/ocas-elephas/intake/
+$OCAS_DATA_ROOT/db/ocas-elephas/intake/
   {signal_id}.signal.json          -- Elephas intake signals (written by Bower, consumed by Elephas)
 ```
 
@@ -492,15 +540,15 @@ skill_okrs:
 
 `bower.init`:
 
-1. Create `~/openclaw/data/ocas-bower/`, `~/openclaw/journals/ocas-bower/`, and `~/openclaw/db/ocas-elephas/intake/` if not present.
+1. Create `$OCAS_DATA_ROOT/data/ocas-bower/`, `$OCAS_DATA_ROOT/journals/ocas-bower/`, and `$OCAS_DATA_ROOT/db/ocas-elephas/intake/` if not present.
 2. Write `config.json` with defaults including ConfigBase fields
-3. Register cron job `bower:scan` if not already present (check `openclaw cron list` first)
+3. Register cron job `bower:scan` if not already present (check the platform scheduling registry first)
 4. Register cron job `bower:weekly-deep` if not already present
 5. All cron jobs use `sessionTarget: isolated`, `lightContext: true`, `wakeMode: next-heartbeat`
 
 ## Update command
 
-`bower.update` — Pull latest release from GitHub. Preserves `~/openclaw/data/ocas-bower/` and journals.
+`bower.update` — Pull latest release from GitHub. Preserves `$OCAS_DATA_ROOT/data/ocas-bower/` and journals.
 
 ## Visibility
 

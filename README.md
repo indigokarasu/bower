@@ -2,6 +2,9 @@
 
 Bower keeps Google Drive organized without ever deleting anything. It scans your full Drive structure and file contents, builds a personalized preference profile from your existing organization patterns, applies domain-specific logic where it detects known domains, and executes non-destructive moves, renames, and description writes -- learning your organizational style over time and auto-approving patterns you've consistently accepted. The goal: you go to sleep and wake up to a Drive that looks the way you would have organized it yourself.
 
+
+Skill packages follow the [agentskills.io](https://agentskills.io/specification) open standard and are compatible with OpenClaw, Hermes Agent, and any agentskills.io-compliant client.
+
 ---
 
 ## Overview
