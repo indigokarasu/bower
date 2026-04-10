@@ -1,3 +1,46 @@
+## [1.4.0] - 2026-04-09
+
+### Added
+- Drive digest (`drive_digest.json`) — lightweight holistic Drive summary updated incrementally after each folder scan
+- Per-folder statistics (naming patterns, domain detection, sacred flags) feed Drive-wide aggregates
+- Analysis uses digest for cross-folder reasoning, scan files for per-file proposals
+- Partial digest works with incomplete scans (scan_coverage < 1.0)
+
+## [1.3.0] - 2026-04-09
+
+### Changed
+- Replaced monolithic `structural_model.json` with folder-by-folder scan files (`scans/{folder_id}.json`)
+- Founding scan now spans multiple sessions with automatic resume via `scan_progress.json`
+- Added `--analyze-now` flag for early results before full scan completes
+- Phase 1 (tree discovery) writes `folder_index.json` — folder tree only, fast for any Drive size
+- Phase 2 (folder scanning) processes one top-level folder at a time, checkpoints after each
+- No timeouts or memory issues for 100k+ file Drives
+
+### Removed
+- `structural_model.json` (replaced by `scans/` directory + `drive_digest.json`)
+- `staging/scan_checkpoint.json` (replaced by `scan_progress.json`)
+
+## [1.2.2] - 2026-04-08
+
+### Fixed
+- Replaced skill.json references with SKILL.md frontmatter for agentskills.io compatibility
+
+## [1.2.1] - 2026-04-08
+
+### Fixed
+- Replaced $OCAS_DATA_ROOT variable with platform-native {agent_root}/commons/ convention
+- Replaced intake directory pattern with journal payload convention
+- Removed hardcoded OpenClaw references for platform portability
+
+## [1.2.0] - 2026-04-08
+
+### Changed
+- Adopted agentskills.io open standard for skill packaging
+- Replaced skill.json with YAML frontmatter in SKILL.md
+- Replaced hardcoded ~/openclaw/ paths with $OCAS_DATA_ROOT/ for platform portability
+- Abstracted cron/heartbeat registration to declarative metadata pattern
+- Added metadata.hermes and metadata.openclaw extension points
+
 ## [1.1.2] - 2026-04-06
 
 ### Added
