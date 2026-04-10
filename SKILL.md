@@ -14,7 +14,7 @@ description: >
 metadata:
   author: Indigo Karasu
   email: mx.indigo.karasu@gmail.com
-  version: "1.2.2"
+  version: "1.3.0"
   hermes:
     tags: [organization, google-drive, files]
     category: interface
@@ -199,11 +199,11 @@ Signal files are written to the `signal` payload field in the journal entry. Bow
 
 ## Commands
 
-`bower.scan.deep [--founding]` — Full Drive crawl. With `--founding` flag (first use only): after scan and analysis, presents all high-confidence proposals grouped by domain as a single accept/reject batch. One decision bootstraps pattern promotion immediately. Builds or refreshes the structural model and preference profile. Reads file contents for classification and description generation. Detects domains and infers naming conventions, depth preference, folder density, and sacred folders. Checkpoints every 500 files; resumes automatically if interrupted.
+`bower.scan.deep [--founding] [--analyze-now]` — Full Drive crawl processed folder-by-folder. Phase 1 discovers the folder tree (fast). Phase 2 scans one top-level folder at a time — listing files, reading contents, building file records — and writes results to `scans/{folder_id}.json` after each folder. Progress saved to `scan_progress.json` after every folder. Resumes automatically across sessions. With `--founding` (first use only): after all folders are scanned, presents high-confidence proposals as a batch for approval. With `--analyze-now`: analyzes whatever has been scanned so far without waiting for completion. Builds or refreshes the preference profile. Detects domains and infers naming conventions, depth preference, folder density, and sacred folders.
 
-`bower.scan.light` — Incremental scan of recently modified files and known outlier zones. Uses existing structural model as baseline. Runs drift detection before proceeding; aborts if drift exceeds threshold. After scan, checks for arrival matches against promoted patterns and auto-applies them immediately if quiet mode is enabled.
+`bower.scan.light` — Incremental scan of recently modified files and known outlier zones. Uses `scan_progress.json` and `folder_index.json` as baseline. Queries Drive for files modified since last scan, updates the relevant `scans/{folder_id}.json` files. Runs drift detection before proceeding; aborts if drift exceeds threshold. After scan, checks for arrival matches against promoted patterns and auto-applies them immediately if quiet mode is enabled.
 
-`bower.analyze` — Runs analysis against the current structural model and preference profile. Loads feedback suppressions and recalibration data, applies domain logic first then generic rules, expires stale proposals, auto-approves pattern-matched proposals, generates ranked move/rename/description proposals. Does not touch Drive.
+`bower.analyze` — Runs analysis against the current folder scans and preference profile. Loads feedback suppressions and recalibration data, applies domain logic first then generic rules, expires stale proposals, auto-approves pattern-matched proposals, generates ranked move/rename/description proposals. Does not touch Drive.
 
 `bower.simulate [--path "Folder/Subfolder"] [--depth N]` — Scans the specified folder (and up to N levels deep, default: full depth) without touching anything or writing any state. Produces a narrative report showing exactly what Bower would do: moves, renames, folder creations, description writes, and why. No proposals written to `proposals.jsonl`. No journal written. Purely read-only. Use to preview Bower's behavior before first use, or to understand what it would do to an unfamiliar folder.
 
@@ -227,19 +227,24 @@ Signal files are written to the `signal` payload field in the journal entry. Bow
 
 `bower.status [--trend]` — Prints SkillStatus: last scan time, preference profile summary, active domains, quiet mode state, drift rate, proposal counts by tier and type, auto-approved pattern count, suppressed class list, last apply run, caps remaining, any errors. With `--trend`: shows Drive health score over the last 8 weeks.
 
-`bower.init` — Initializes storage, registers background jobs, writes default config. Runs automatically on first use. On first run, prompts: "Run founding scan now? This will scan your Drive and present a one-time batch approval to bootstrap Bower's preferences."
+`bower.init` — Initializes storage, registers background jobs, writes default config. Runs automatically on first use. On first run, prompts: "Run founding scan? This will scan your Drive in batches. Large Drives may take several sessions to complete. Progress is saved automatically."
 
 ## Execution flow
 
 ### First use (founding run)
-1. Run `bower.init`. On first run it asks: "Run founding scan now?"
+1. Run `bower.init`. On first run it asks: "Run founding scan?"
 2. Run `bower.scan.deep --founding`.
-3. Scan completes. Bower builds structural model, preference profile, and domain detection.
-4. Bower runs `bower.analyze` automatically.
-5. Present all high-confidence proposals grouped by domain as a single batch: "Bower found 47 high-confidence proposals across 4 domains. Accept all / Review / Reject all."
-6. If accepted: mark all high-confidence proposals `approved`, run `bower.apply` immediately. Pattern promotion credit is granted for all executed proposals -- no need to wait for 3 cycles.
-7. If reviewed: user approves/rejects per domain group. Execute approved subset.
-8. Founding run complete. Bower is now bootstrapped with real preference data.
+3. Phase 1: tree discovery (fast — lists all folders, writes `folder_index.json`).
+4. Phase 2: scan folders one at a time, largest first. After each folder, write results to `scans/{folder_id}.json` and update `scan_progress.json`.
+5. If session time runs low: stop gracefully, report progress. "Scanned 12 of 42 top-level folders (34,000 files). Run `bower.scan.deep --founding` again to continue."
+6. On subsequent invocations: resume from `scan_progress.json`. No work is repeated.
+7. When all folders scanned: run `bower.analyze`, build preference profile and domain detection.
+8. Present all high-confidence proposals grouped by domain as a single batch: "Bower found 47 high-confidence proposals across 4 domains. Accept all / Review / Reject all."
+9. If accepted: mark all high-confidence proposals `approved`, run `bower.apply` immediately. Pattern promotion credit is granted for all executed proposals -- no need to wait for 3 cycles.
+10. If reviewed: user approves/rejects per domain group. Execute approved subset.
+11. Founding run complete. Bower is now bootstrapped with real preference data.
+
+For early results before all folders are scanned: `bower.scan.deep --founding --analyze-now` analyzes whatever has been scanned so far and presents proposals, noting which folders remain.
 
 ### Steady state (background)
 Daily light scan at 02:00 PT: `bower.scan.light` → arrival detection → `bower.analyze` → auto-apply promoted patterns if quiet mode enabled → digest only if failures or skips occurred.
@@ -250,7 +255,7 @@ Bower never auto-applies proposals that haven't been approved or pattern-promote
 
 ### Arrival detection
 After every `bower.scan.light`, for each newly added or modified file:
-1. Classify the file (domain, content summary, outlier class) using the current structural model.
+1. Classify the file (domain, content summary, outlier class) using the current folder scans.
 2. Check its `pattern_key` against `auto_approved_patterns` in the preference profile.
 3. If a promoted pattern matches with `confidence: high`: generate an `approved` proposal directly (skip `pending`). If quiet mode is on, apply immediately within the same session.
 4. If a promoted pattern matches with `confidence: med`: generate a `pending` proposal. Do not auto-apply.
@@ -266,7 +271,7 @@ Arrival detection runs within the light scan session. It does not spawn a separa
 4. Do not write to `proposals.jsonl`, `analysis_events.jsonl`, or any log. Do not write a journal.
 5. Produce a simulation report (see Simulation output below). Print to user only.
 
-Simulation is completely read-only. It uses the existing preference profile and structural model but does not update them. If no structural model exists yet, simulate using domain logic and generic rules without preference calibration, and note this in the report.
+Simulation is completely read-only. It uses the existing preference profile and folder scans but does not update them. If no folder scans exists yet, simulate using domain logic and generic rules without preference calibration, and note this in the report.
 
 ### Simulation output format
 ```
@@ -382,12 +387,14 @@ Key invariants:
 ## Scan output
 
 `bower.scan.deep` produces:
-- A structural model written to `structural_model.json` (full Drive tree with metadata, permissions, content summaries, existing descriptions, and proposed descriptions)
+- `folder_index.json` — full folder tree with paths, depths, permissions (Phase 1)
+- `scans/{folder_id}.json` — file records per top-level folder tree (Phase 2, one per folder)
+- `scan_progress.json` — scan state tracking (updated after each folder)
 - A scan event appended to `scan_events.jsonl` (includes content_read_count, content_skip_count, description_proposed_count)
 
 `bower.scan.light` produces:
-- An updated structural model for changed files only
-- A scan event with drift_rate; aborts and does not update the model if drift exceeds threshold
+- Updated `scans/{folder_id}.json` files for folders containing recently modified files
+- A scan event with drift_rate; aborts and does not update if drift exceeds threshold
 
 `bower.analyze` produces:
 - An outlier report appended to `analysis_events.jsonl`
@@ -406,9 +413,9 @@ Bower uses Google Drive access for all Drive operations. Available operations:
 
 Bower never calls delete operations. If a delete operation is available, Bower must not invoke it under any circumstances.
 
-During `bower.scan.deep`, paginate through all files. Capture for each file: id, name, mimeType, parents, modifiedTime, starred, size, trashed, description. Exclude trashed files from the structural model.
+During `bower.scan.deep`, Phase 1 lists all folders (fast metadata query). Phase 2 processes one folder tree at a time — paginate through files in that folder, capturing for each: id, name, mimeType, parents, modifiedTime, starred, size, trashed, description. Exclude trashed files. Write results to `scans/{folder_id}.json` after each folder completes.
 
-For every folder in the results, additionally fetch its permissions resource and store the full permission set (direct + inherited) in the structural model. Permission data is required for move proposal generation. If permissions are unavailable, set `permissions_available: false` in the scan event and suppress all move proposals.
+For every folder in the results, additionally fetch its permissions resource and store the full permission set (direct + inherited) in `folder_index.json`. Permission data is required for move proposal generation. If permissions are unavailable, set `permissions_available: false` in the scan event and suppress all move proposals.
 
 ## Background tasks
 
@@ -469,7 +476,11 @@ Journal path: `{agent_root}/commons/journals/ocas-bower/YYYY-MM-DD/{run_id}.json
 ```
 {agent_root}/commons/data/ocas-bower/
   config.json
-  structural_model.json       -- current Drive tree with folder_index (overwritten each deep scan)
+  folder_index.json           -- full folder tree with paths, depths, permissions (written during tree discovery)
+  scan_progress.json          -- scan state: which folders done/pending, resume point
+  scans/                      -- one file per top-level folder tree
+    {folder_id}.json           -- file records for that folder tree
+    _root.json                 -- files at Drive root with no parent folder
   preference_profile.json     -- inferred preferences, domains, patterns, class precision (updated each deep scan)
   proposals.jsonl             -- all proposals: pending, approved, executed, failed, skipped, expired
   move_log.jsonl              -- record of every executed operation with previous_value
@@ -480,14 +491,9 @@ Journal path: `{agent_root}/commons/journals/ocas-bower/YYYY-MM-DD/{run_id}.json
   health_history.jsonl        -- weekly Drive health score snapshots (appended each Sunday)
   decisions.jsonl             -- DecisionRecords
   reports/                    -- dated apply digest Markdown files
-  staging/
-    scan_checkpoint.json      -- deep scan resume checkpoint (deleted on completion)
 
 {agent_root}/commons/journals/ocas-bower/
   YYYY-MM-DD/{run_id}.json
-
-journal payload fields
-  {signal_id}.signal.json          -- Elephas (via journal signal payload) signals (written by Bower, consumed by Elephas)
 ```
 
 ## OKRs
@@ -557,7 +563,7 @@ public
 |------|-------------|
 | `references/organization_rules.md` | Before every `bower.analyze` run; defines preference inference, pattern promotion, taxonomy inference, all proposal generation rules, permission lookup, feedback suppression, recalibration, scan resume, cap behavior, digest format, and review narrative |
 | `references/domains.md` | Before every `bower.analyze` run; defines domain detection, prescriptive/descriptive mode, canonical structures, and per-domain filing rules for Taxes, Projects, Home, Finance, Legal, Medical, Archive, Education |
-| `references/analysis_schema.md` | Before `bower.scan.deep` or `bower.analyze`; defines all data schemas including preference profile, structural model, folder_index, proposals, move log, undo log, feedback log, scan checkpoint, and config |
+| `references/analysis_schema.md` | Before `bower.scan.deep` or `bower.analyze`; defines all data schemas including preference profile, folder_index, scan_progress, proposals, move log, undo log, feedback log, and config |
 
 ## Support file map
 
