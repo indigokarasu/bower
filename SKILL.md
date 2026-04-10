@@ -14,7 +14,7 @@ description: >
 metadata:
   author: Indigo Karasu
   email: mx.indigo.karasu@gmail.com
-  version: "1.3.0"
+  version: "1.4.0"
   hermes:
     tags: [organization, google-drive, files]
     category: interface
@@ -235,7 +235,7 @@ Signal files are written to the `signal` payload field in the journal entry. Bow
 1. Run `bower.init`. On first run it asks: "Run founding scan?"
 2. Run `bower.scan.deep --founding`.
 3. Phase 1: tree discovery (fast — lists all folders, writes `folder_index.json`).
-4. Phase 2: scan folders one at a time, largest first. After each folder, write results to `scans/{folder_id}.json` and update `scan_progress.json`.
+4. Phase 2: scan folders one at a time, largest first. After each folder, write results to `scans/{folder_id}.json`, update `drive_digest.json` with this folder's contribution, and update `scan_progress.json`.
 5. If session time runs low: stop gracefully, report progress. "Scanned 12 of 42 top-level folders (34,000 files). Run `bower.scan.deep --founding` again to continue."
 6. On subsequent invocations: resume from `scan_progress.json`. No work is repeated.
 7. When all folders scanned: run `bower.analyze`, build preference profile and domain detection.
@@ -389,6 +389,7 @@ Key invariants:
 `bower.scan.deep` produces:
 - `folder_index.json` — full folder tree with paths, depths, permissions (Phase 1)
 - `scans/{folder_id}.json` — file records per top-level folder tree (Phase 2, one per folder)
+- `drive_digest.json` — lightweight holistic Drive summary, updated after each folder completes
 - `scan_progress.json` — scan state tracking (updated after each folder)
 - A scan event appended to `scan_events.jsonl` (includes content_read_count, content_skip_count, description_proposed_count)
 
@@ -476,12 +477,13 @@ Journal path: `{agent_root}/commons/journals/ocas-bower/YYYY-MM-DD/{run_id}.json
 ```
 {agent_root}/commons/data/ocas-bower/
   config.json
-  folder_index.json           -- full folder tree with paths, depths, permissions (written during tree discovery)
+  folder_index.json           -- full folder tree with paths, depths, permissions (Phase 1)
+  drive_digest.json           -- lightweight holistic Drive summary, updated after each folder scan
   scan_progress.json          -- scan state: which folders done/pending, resume point
   scans/                      -- one file per top-level folder tree
     {folder_id}.json           -- file records for that folder tree
     _root.json                 -- files at Drive root with no parent folder
-  preference_profile.json     -- inferred preferences, domains, patterns, class precision (updated each deep scan)
+  preference_profile.json     -- inferred preferences, domains, patterns, class precision (derived from digest)
   proposals.jsonl             -- all proposals: pending, approved, executed, failed, skipped, expired
   move_log.jsonl              -- record of every executed operation with previous_value
   undo_log.jsonl              -- record of every executed undo

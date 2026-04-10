@@ -390,8 +390,9 @@ Process one top-level folder tree at a time:
 3. List all files in that folder tree (Drive API `parents` query, paginated).
 4. For each file: read content if applicable, build file record.
 5. Write completed results to `scans/{folder_id}.json`.
-6. Move the folder ID from `pending_folders` to `scanned_folders`.
-7. Update `total_files_scanned` and `last_checkpoint_at`.
+6. **Update `drive_digest.json`** with this folder's contribution (see Drive Digest below).
+7. Move the folder ID from `pending_folders` to `scanned_folders`.
+8. Update `total_files_scanned` and `last_checkpoint_at`.
 
 **Within-folder checkpointing:** For large individual folders (thousands of files), save `current_folder_page_token` in `scan_progress.json` periodically. On resume, the folder scan continues from the saved page token and appends to the existing `scans/{folder_id}.json`.
 
@@ -401,7 +402,90 @@ Files at the Drive root (no parent folder) are collected in `scans/_root.json`.
 
 ### Phase 3: Completion
 
-When all folders are scanned, set `phase: complete` in `scan_progress.json`. Run `bower.analyze` against the `scans/` directory.
+When all folders are scanned, set `phase: complete` in `scan_progress.json`. The `drive_digest.json` now represents the full Drive. Run `bower.analyze` using the digest for holistic decisions and individual scan files for per-file proposal generation.
+
+---
+
+## Drive digest (drive_digest.json)
+
+The drive digest is a lightweight summary of the entire Drive's organizational state, built incrementally as each folder is scanned. It is small enough to hold in memory at all times and contains everything needed for holistic analysis — without any individual file records.
+
+The digest is updated after each folder scan completes. It is never built from scratch by reading all scan files; instead, each folder's contribution is merged in as it finishes. This means the digest is always current with whatever has been scanned so far.
+
+### What the digest captures
+
+**Per-folder statistics** (one entry per folder in the Drive, not just top-level):
+```json
+{
+  "folder_id": "string",
+  "path": "string",
+  "depth": "number",
+  "file_count": "number",
+  "subfolder_count": "number",
+  "last_modified": "ISO 8601 -- most recent modifiedTime of any file in this folder",
+  "mime_type_distribution": {"application/pdf": 3, "application/vnd.google-apps.document": 12},
+  "naming_pattern": "YYYY-MM-DD prefix | title-case | mixed | null",
+  "date_convention": "prefix | suffix | folder-name | none",
+  "detected_domain": "taxes | finance | projects | null",
+  "domain_confidence": "high | med | low | null",
+  "has_year_subfolders": "boolean",
+  "sacred": "boolean -- unchanged 90+ days with 20+ files",
+  "outlier_count": "number -- files that don't match the folder's dominant pattern",
+  "root_files_count": "number -- files directly in this folder (not in subfolders)"
+}
+```
+
+**Drive-wide aggregates:**
+```json
+{
+  "total_files": "number",
+  "total_folders": "number",
+  "median_depth": "number",
+  "median_files_per_folder": "number",
+  "dominant_naming": "YYYY-MM-DD prefix | title-case | mixed",
+  "dominant_date_convention": "prefix | suffix | folder-name | none",
+  "domains_detected": [
+    {"domain": "taxes", "root_path": "Finance/Taxes", "mode": "prescriptive", "confidence": "high"},
+    {"domain": "projects", "root_path": "Projects", "mode": "descriptive", "confidence": "high"}
+  ],
+  "sacred_folders": ["folder_id_1", "folder_id_2"],
+  "root_level_file_count": "number -- files at Drive root with no parent",
+  "stale_staging_count": "number -- files in staging-like folders >30 days old",
+  "description_coverage": "number -- fraction of readable files with non-empty description",
+  "cross_folder_patterns": [
+    {"pattern": "tax documents in 3+ locations", "folders": ["folder_id_a", "folder_id_b", "folder_id_c"]},
+    {"pattern": "duplicate filenames across folders", "count": 14}
+  ],
+  "scan_coverage": "number -- fraction of top-level folders scanned (0.0 to 1.0)",
+  "last_updated": "ISO 8601"
+}
+```
+
+### How the digest enables holistic analysis
+
+Without the digest, `bower.analyze` would need to load all scan files to answer questions like "what naming convention dominates across the Drive?" or "are there tax documents scattered across multiple folders?" The digest pre-computes these cross-cutting summaries.
+
+Analysis uses the digest for:
+- **Preference inference**: naming conventions, depth preference, folder density, date handling — all derived from the digest's aggregates and per-folder stats.
+- **Domain detection**: the digest tracks detected domains per folder; cross-folder patterns surface domain fragmentation (e.g., tax files in 3 places).
+- **Sacred folder identification**: the digest flags folders unchanged for 90+ days.
+- **Outlier context**: when evaluating a file in a specific folder, the digest provides the folder's dominant pattern, the Drive-wide dominant pattern, and whether the file's folder is part of a recognized domain.
+- **Cross-folder duplicate detection**: the digest tracks filename collisions across folders.
+
+Analysis uses individual `scans/{folder_id}.json` files for:
+- **Per-file proposal generation**: the actual file records with content summaries, permissions, and metadata needed to generate specific move/rename/describe proposals.
+- **Permission comparison**: file-level and folder-level permission sets for move safety checks.
+- **Staleness checks**: individual file `modifiedTime` values.
+
+This two-layer approach means `bower.analyze` loads one small digest file for holistic reasoning, then loads individual scan files one at a time for per-folder proposal generation. Memory usage stays bounded.
+
+### Digest updates during light scan
+
+`bower.scan.light` updates the digest for any folder containing recently modified files. It adjusts the per-folder stats and recalculates Drive-wide aggregates. The digest stays current without a full deep scan.
+
+### Partial digest
+
+When not all folders have been scanned, `scan_coverage < 1.0` in the digest. Analysis can still run — it uses whatever data is available and notes the coverage gap. As more folders are scanned in subsequent sessions, the digest fills in and analysis improves.
 
 ### Resume behavior
 
