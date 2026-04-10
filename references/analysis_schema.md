@@ -87,6 +87,65 @@ Files at the Drive root (no parent folder) are collected in a special scan file:
 
 ---
 
+## Drive digest (drive_digest.json)
+
+Lightweight summary of the Drive's organizational state, updated incrementally after each folder scan. Small enough to hold in memory. Contains no individual file records — only per-folder statistics and Drive-wide aggregates. See `organization_rules.md` for the full specification of what the digest captures and how analysis uses it.
+
+```json
+{
+  "scan_id": "string",
+  "last_updated": "string -- ISO 8601",
+  "scan_coverage": "number -- 0.0 to 1.0, fraction of top-level folders scanned",
+  "total_files": "number",
+  "total_folders": "number",
+  "median_depth": "number",
+  "median_files_per_folder": "number",
+  "dominant_naming": "string|null",
+  "dominant_date_convention": "string|null",
+  "domains_detected": [
+    {
+      "domain": "string",
+      "root_path": "string",
+      "mode": "string -- prescriptive|descriptive",
+      "confidence": "string -- high|med|low"
+    }
+  ],
+  "sacred_folders": ["string -- folder IDs"],
+  "root_level_file_count": "number",
+  "stale_staging_count": "number",
+  "description_coverage": "number -- 0.0 to 1.0",
+  "cross_folder_patterns": [
+    {
+      "pattern": "string -- human-readable description",
+      "folders": ["string -- folder IDs"],
+      "count": "number|null"
+    }
+  ],
+  "folder_stats": {
+    "FOLDER_ID": {
+      "path": "string",
+      "depth": "number",
+      "file_count": "number",
+      "subfolder_count": "number",
+      "last_modified": "string -- ISO 8601",
+      "mime_type_distribution": {"string": "number"},
+      "naming_pattern": "string|null",
+      "date_convention": "string|null",
+      "detected_domain": "string|null",
+      "domain_confidence": "string|null",
+      "has_year_subfolders": "boolean",
+      "sacred": "boolean",
+      "outlier_count": "number",
+      "root_files_count": "number"
+    }
+  }
+}
+```
+
+The digest is updated after each folder scan — never rebuilt from scratch. Each folder's contribution (file counts, naming patterns, domain signals) is merged into the running totals and per-folder stats. Drive-wide aggregates (medians, dominant patterns, cross-folder patterns) are recalculated from the per-folder stats after each merge.
+
+---
+
 ## Proposal record (proposals.jsonl)
 
 One record per proposal, appended by `bower.analyze`.
