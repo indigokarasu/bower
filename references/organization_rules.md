@@ -372,25 +372,48 @@ When `bower.status` is called, include a "Learned suppressions" count. When `bow
 
 ---
 
-## Scan resume (deep scan only)
+## Incremental scanning (deep scan)
 
-Large drives can take 30+ minutes to scan. If `bower.scan.deep` is interrupted (process killed, timeout, network failure), it should resume rather than restart.
+Large Drives (50k+ files) cannot be scanned in a single session. Deep scans work in three phases, with progress saved to disk after each folder. Scanning can span multiple sessions — kill the process at any point and resume later.
 
-### Checkpoint behavior
+### Phase 1: Tree discovery
 
-Every 500 files processed, write a checkpoint to `{agent_root}/commons/data/ocas-bower/staging/scan_checkpoint.json`. See `analysis_schema.md` for the checkpoint schema.
+List all folders in Drive (`mimeType = 'application/vnd.google-apps.folder'`, paginated). Build `folder_index.json` with the full folder tree — paths, depths, permissions. This is fast even for huge Drives because folder count is a small fraction of file count.
+
+Write `scan_progress.json` with `phase: folder_scanning` and all top-level folders listed in `pending_folders`, sorted largest first (folders with the most descendants processed first for maximum organizational signal early).
+
+### Phase 2: Folder scanning
+
+Process one top-level folder tree at a time:
+1. Pop the next folder from `pending_folders` in `scan_progress.json`.
+2. Set `current_folder` to that folder ID.
+3. List all files in that folder tree (Drive API `parents` query, paginated).
+4. For each file: read content if applicable, build file record.
+5. Write completed results to `scans/{folder_id}.json`.
+6. Move the folder ID from `pending_folders` to `scanned_folders`.
+7. Update `total_files_scanned` and `last_checkpoint_at`.
+
+**Within-folder checkpointing:** For large individual folders (thousands of files), save `current_folder_page_token` in `scan_progress.json` periodically. On resume, the folder scan continues from the saved page token and appends to the existing `scans/{folder_id}.json`.
+
+**Session time awareness:** Before starting each folder, estimate remaining session time. If insufficient for the next folder, stop gracefully and report progress.
+
+Files at the Drive root (no parent folder) are collected in `scans/_root.json`.
+
+### Phase 3: Completion
+
+When all folders are scanned, set `phase: complete` in `scan_progress.json`. Run `bower.analyze` against the `scans/` directory.
+
+### Resume behavior
 
 On `bower.scan.deep` start:
-1. Check for an existing `scan_checkpoint.json`.
-2. If found and less than 24 hours old: resume from `page_token`, prepend `partial_files` to the accumulating result, log `checkpoint_id` in the scan event.
-3. If found but older than 24 hours: delete it and start fresh.
-4. If not found: start fresh.
+1. Check for existing `scan_progress.json`.
+2. If found with `phase != complete` and less than 7 days old: resume. Report "Resuming scan: {N} of {M} folders scanned ({files_scanned} files). Continuing..."
+3. If found but older than 7 days: delete `scans/` contents and start fresh.
+4. If not found: start fresh with Phase 1.
 
-On successful scan completion, delete `scan_checkpoint.json`.
+### Partial analysis
 
-### User visibility
-
-If resuming from a checkpoint, note it in scan output: "Resuming scan from checkpoint (N files already processed)."
+`bower.scan.deep --analyze-now` runs `bower.analyze` on whatever folders have been scanned so far, without waiting for all folders to complete. The analysis notes which folders are not yet included. Useful for large Drives where the user wants early results.
 
 ---
 
@@ -452,9 +475,19 @@ Quiet mode is off by default. Enable with `bower.preferences.quiet --on`.
 
 ## Founding run
 
-The founding run is a one-time bootstrap triggered by `bower.scan.deep --founding`. It runs only once; `founding_run_complete: true` is set in config on completion.
+The founding run is a one-time bootstrap triggered by `bower.scan.deep --founding`. It runs only once; `founding_run_complete: true` is set in config on completion. Large Drives may require multiple sessions to complete — progress is saved automatically.
 
-After scan and analysis complete:
+### Multi-session founding flow
+
+1. First invocation: tree discovery (fast), then begin scanning folders largest-first.
+2. After each folder: results written to `scans/{folder_id}.json`, progress saved to `scan_progress.json`.
+3. If session time runs low, stop gracefully and report:
+   "Scanned {N} of {M} top-level folders ({files} files). Run `bower.scan.deep --founding` again to continue."
+4. Subsequent invocations: resume from `scan_progress.json`. No work is repeated.
+5. When all folders are scanned: run `bower.analyze`, proceed to batch approval.
+
+### Batch approval (after scan completes)
+
 1. Group all high-confidence proposals by domain (and "General" for non-domain proposals).
 2. Present to the user as a single batch grouped by domain. Show counts and a 3-5 item sample per group.
 3. Accept options: "Accept all", "Review by domain" (approve/reject per group), "Reject all".
@@ -463,6 +496,10 @@ After scan and analysis complete:
 6. This means Bower arrives at steady-state auto-approval behavior after a single founding run rather than needing 3 cycles per pattern.
 
 If the founding run is rejected entirely, Bower falls back to normal first-use flow without promotion credit.
+
+### Early analysis
+
+`bower.scan.deep --founding --analyze-now` runs analysis on whatever folders have been scanned so far, without waiting for all folders. The analysis notes which top-level folders are not yet included. This lets the user see early results and start approving patterns while remaining folders are scanned in future sessions.
 
 ---
 

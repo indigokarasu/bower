@@ -4,27 +4,27 @@ Canonical data formats for Bower's structural model, proposals, and log records.
 
 ---
 
-## Structural model (structural_model.json)
+## Folder index (folder_index.json)
 
-Written by `bower.scan.deep`. Overwritten on each deep scan.
+Written during Phase 1 (tree discovery) of `bower.scan.deep`. Contains the full folder tree with metadata and permissions — no file records. Small even for large Drives because folder count is a fraction of file count.
 
 ```json
 {
   "scan_id": "string -- unique identifier (scan_{hash})",
-  "scan_type": "string -- deep|light",
-  "scanned_at": "string -- ISO 8601",
-  "file_count": "number",
+  "discovered_at": "string -- ISO 8601",
   "folder_count": "number",
   "root_folders": ["string -- Drive folder IDs at depth 1"],
   "taxonomy": {
     "labels": ["string -- inferred category labels from folder names"],
     "depth_distribution": {"1": 0, "2": 0, "3": 0, "4+": 0}
   },
-  "folder_index": {
+  "folders": {
     "FOLDER_ID": {
       "name": "string",
       "path": "string",
       "depth": "number",
+      "parent_id": "string|null -- null for root-level folders",
+      "child_folder_count": "number -- direct child folders",
       "effective_permissions": [
         {
           "emailAddress": "string|null",
@@ -34,7 +34,25 @@ Written by `bower.scan.deep`. Overwritten on each deep scan.
         }
       ]
     }
-  },
+  }
+}
+```
+
+---
+
+## Folder scan (scans/{folder_id}.json)
+
+One file per top-level folder tree, written during Phase 2 (folder scanning) of `bower.scan.deep`. Contains all file records for that folder and its descendants. Each file is small enough to write atomically and hold in memory independently.
+
+```json
+{
+  "folder_id": "string -- top-level folder ID this scan covers",
+  "folder_path": "string -- full path of the folder",
+  "scan_id": "string -- parent scan ID from scan_progress.json",
+  "scanned_at": "string -- ISO 8601",
+  "file_count": "number",
+  "content_read_count": "number",
+  "content_skip_count": "number",
   "files": [
     {
       "id": "string -- Drive file ID",
@@ -64,6 +82,8 @@ Written by `bower.scan.deep`. Overwritten on each deep scan.
   ]
 }
 ```
+
+Files at the Drive root (no parent folder) are collected in a special scan file: `scans/_root.json`.
 
 ---
 
@@ -323,22 +343,32 @@ Bower reads `feedback_log.jsonl` at the start of every `bower.analyze` run to bu
 
 ---
 
-## Scan checkpoint (staging/scan_checkpoint.json)
+## Scan progress (scan_progress.json)
 
-Written periodically during `bower.scan.deep` to enable resume after interruption.
+Tracks the state of an in-progress or completed deep scan. Updated after each folder completes. Enables resume across sessions — kill the process at any point and nothing is lost.
 
 ```json
 {
-  "checkpoint_id": "string -- unique identifier (ckpt_{hash})",
-  "scan_id": "string -- the in-progress scan this checkpoint belongs to",
-  "saved_at": "string -- ISO 8601",
-  "page_token": "string|null -- Drive API page token for resuming file listing",
-  "files_scanned": "number -- count of files processed so far",
-  "partial_files": "array -- file records collected so far (same schema as structural model files array)"
+  "scan_id": "string -- unique identifier (scan_{hash})",
+  "started_at": "string -- ISO 8601",
+  "phase": "string -- tree_discovery|folder_scanning|complete",
+  "total_folders": "number -- count of top-level folders to scan",
+  "scanned_folders": ["string -- folder IDs that have been fully scanned"],
+  "pending_folders": ["string -- folder IDs not yet scanned"],
+  "current_folder": "string|null -- folder ID currently being scanned, null if between folders",
+  "current_folder_page_token": "string|null -- Drive API page token for resuming within a large folder",
+  "total_files_scanned": "number -- running total across all folders",
+  "last_checkpoint_at": "string -- ISO 8601"
 }
 ```
 
-Checkpoint is written every 500 files. On scan start, Bower checks for an existing checkpoint with the same `scan_id`. If found and less than 24 hours old, resume from `page_token` and prepend `partial_files` to the result. Delete checkpoint on successful scan completion.
+On `bower.scan.deep` start:
+1. Check for existing `scan_progress.json`.
+2. If found with `phase != complete` and `started_at` less than 7 days ago: resume from `current_folder` or next `pending_folders` entry.
+3. If found but older than 7 days: delete all `scans/*.json` and start fresh.
+4. If not found: start fresh with Phase 1 (tree discovery).
+
+On successful completion of all folders: set `phase: complete`. Do not delete `scan_progress.json` — it records when the last full scan finished.
 
 
 ## Drive health snapshot (health_history.jsonl)
