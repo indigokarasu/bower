@@ -78,6 +78,9 @@ Each domain can operate in prescriptive mode (moves toward a canonical structure
 
 ## Changelog
 
+### v1.4.3 — April 12, 2026
+- Generalized Google Drive MCP reference to platform-agnostic capability description
+
 ### v1.1.0 -- April 2, 2026
 - Full signal emission to Elephas for Drive artifacts (Thing/DigitalArtifact, Entity/Person, Place, Concept/Event, Concept/Idea)
 - All emitted signals carry `user_relevance: "user"` — Drive content is inherently user-owned

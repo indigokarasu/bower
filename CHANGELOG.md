@@ -1,3 +1,8 @@
+## [1.4.3] - 2026-04-12
+
+### Changed
+- Generalized Google Drive MCP reference to platform-agnostic capability description
+
 ## [1.4.0] - 2026-04-09
 
 ### Added
