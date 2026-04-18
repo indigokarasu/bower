@@ -570,3 +570,399 @@ public
 ## Support file map
 
 This skill includes no external support files.
+
+
+---
+
+## Integrated: bower-scan-debug
+
+# Bower Deep Scan — Debug & Resume
+
+## Critical File Layout Facts
+
+### folder_index.json — Single JSON Object (Not JSONL)
+```json
+{"scan_timestamp":"...","total_folders":73900,"folders":[{"id":"...","name":"..."}]}
+```
+Load with `json.load(f)`, NOT line-by-line.
+
+### scans/ — Authoritative Source of Truth
+Each `.json` file = one scanned folder. Count files directly:
+```bash
+ls /root/.hermes/commons/data/ocas-bower/scans/ | wc -l
+```
+
+### scan_progress.json — Unreliable for Resume
+The `scanned_folders` array is often stale/empty even when `scans/` has files. Always use `scans/` as ground truth.
+
+## Diagnosis Commands
+
+```python
+# Count actual scanned folders
+import json
+from pathlib import Path
+scanned = len(list(Path("/root/.hermes/commons/data/ocas-bower/scans").glob("*.json")))
+
+# Total folders
+with open("/root/.hermes/commons/data/ocas-bower/folder_index.json") as f:
+    d = json.load(f)
+total = d.get("total_folders")
+remaining = total - scanned
+```
+
+## Resume Pattern
+
+```python
+from pathlib import Path
+import json
+
+scans_dir = Path("/root/.hermes/commons/data/ocas-bower/scans")
+folder_index = json.load(open("/root/.hermes/commons/data/ocas-bower/folder_index.json"))
+
+# Build scanned set from scans/ directory
+scanned_ids = {f.stem for f in scans_dir.glob("*.json")}
+
+# Find unscanned folders
+unscanned = [fd for fd in folder_index["folders"] if fd["id"] not in scanned_ids]
+```
+
+## Two-Phase Deep Scan
+
+**Phase 1**: Tree discovery → `folder_index.json`
+**Phase 2**: Scan each folder → `scans/{folder_id}.json`
+**Content enrichment**: `bower_read_contents.py` → `content_summaries.jsonl`
+
+All three produce distinct outputs. Proposal generation requires Phase 2 + content.
+
+## Scripts Location
+
+- `bower_resume_scan.py` — resumable folder scanner at:
+  `/root/.hermes/commons/data/ocas-bower/bower_resume_scan.py`
+- `bower_read_contents.py` — content enrichment at:
+  `/root/.hermes/commons/data/ocas-bower/bower_read_contents.py`
+- `bower_full_scan.py` (from backup):
+  `/root/.hermes/2026-04-06_21-34-18/data/hermes-bower/bower_scan_deep.py`
+
+## Run in Background
+
+```bash
+cd /root/.hermes/commons/data/ocas-bower
+nohup python3 bower_resume_scan.py > /tmp/bower_resume.log 2>&1 &
+echo "PID: $!"
+
+
+
+---
+
+## Integrated: bower-scan-debug-lessons
+
+# Bower Scan Debug Lessons
+
+## Problem
+Bower foundation scan (Phase 2: file content reading) never ran. The cron job `bower:weekly-deep` has never completed (`last_run: null`).
+
+## Root Causes
+
+### 1. SKILL.md is documentation, not code
+The SKILL.md describes `bower.scan.deep` and `bower.scan.light` as if they were CLI commands.
+In reality, the cron agent loads the SKILL.md and reads the documentation — it has NO executable code to run.
+**Fix:** Executable Python scripts must live in `{agent_root}/commons/data/ocas-bower/`. The cron agent must be told to run those scripts explicitly.
+
+### 2. Two different data paths
+- Old scan: `/root/.hermes/data/hermes-bower/structural_model.json` (46,150 files, complete from April 9)
+- New scan: `/root/.hermes/commons/data/ocas-bower/scans/` (target for ocas-bower)
+These were never bridged. Fixed by running `import_old_scan.py`.
+
+### 3. folder_index.json format mismatch
+The `analysis_schema.md` says `folder_index.json` has a `folders` dict keyed by ID.
+The ACTUAL format is a LIST of folder objects:
+```json
+{"folders": [{"id": "...", "name": "...", "parents": ["..."]}], "total_folders": 73900}
+```
+Root folders are folders whose ID is not in ANY other folder's `parents` list.
+
+## Findings About This User's Drive
+
+- **73,900 folders** in folder_index, but only ~961 with actual files
+- **~46,000 real files** (imported from old hermes-bower scan)
+- ~7,000 files are readable text/Google Docs
+- ~42,000 files are binary (images, videos, zip) — not content-readable
+- **Top folders**: timestamped backup folders (`/2026-04-09_06-00-01/` = 12,070 files)
+- **~460 files per API page** — full listing requires pagination
+- Full content scan takes 20+ minutes for all files
+
+## How to Run the Scan
+
+```bash
+# Phase 2: list all Drive files, group by root folder, write scans/
+python3 {agent_root}/commons/data/ocas-bower/bower_full_scan.py --read-content
+
+# Read content only for existing scans (after listing)
+python3 {agent_root}/commons/data/ocas-bower/bower_content_fast.py
+
+# Import old complete scan into new format
+python3 {agent_root}/commons/data/ocas-bower/import_old_scan.py
+```
+
+## Google Drive API Notes
+
+- Token: `/root/.hermes/google_token.json` (Works, ~460 files/page)
+- Google Docs: use `files().export_media()` NOT `get_media()`
+- Readable: `text/plain`, `text/html`, `text/csv`, `text/x-python`, `text/markdown`, `application/json`, `application/pdf`, `application/vnd.google-apps.document/spreadsheet/presentation`
+- Safe rate: ~12 calls/sec; above that gets HTTP 429 errors
+- PDFs via Drive API return binary — skip them
+
+## Status (2026-04-18)
+
+- 49,622 files scanned (metadata)
+- ~900 content reads done (Google Docs primarily)
+- `scan_progress.json` shows `phase: file_scanning_in_progress`
+
+
+
+---
+
+## Integrated: ocas-expansion
+
+# Expansion Pipeline
+
+Orchestrates the three-phase enrichment pipeline: Scout (Structural OSINT) → Sift (Intellectual Deep Research) → Weave (Synthesis & Graph Upsert). Processes targets from `expansion_queue.json`, enriching each person's profile with provenance-backed findings and updating the Weave social graph.
+
+## When to use
+
+- Scheduled cron enrichment of the social graph
+- Batch processing of new contacts/leads from the expansion queue
+- Re-enrichment of existing person nodes with fresh OSINT data
+
+## Commands
+
+### expansion.build-queue
+
+Builds `expansion_queue.json` from the Weave DB — **must run before every pipeline execution**. Queries LadybugDB directly to find unenriched contacts, excluding anyone processed in the last 180 days.
+
+**Deduplication is automatic and mandatory.** The system tracks enrichment via `source_ref`:
+- Contacts with `source_ref` containing `google-contacts` are **unenriched** (eligible for queue)
+- After enrichment, `source_ref` changes to `expansion_YYYYMMDD_scout` — automatically excluding them from future queries
+- A 180-day safety cutoff is also enforced via the `notes` field (parses `| [scout_enriched: YYYY-MM-DD]`)
+
+Execute via LadybugDB CLI or Python API:
+```bash
+lbug "MATCH (n:Person) WHERE n.source_ref CONTAINS 'google-contacts' RETURN n.id, n.name, n.email ORDER BY n.record_time DESC LIMIT 10" /root/.hermes/commons/db/ocas-weave/weave.lbug
+```
+
+Or via Python API (real_ladybug):
+```python
+import real_ladybug as lb
+from datetime import datetime, timezone, timedelta
+import re, json
+
+DB = '/root/.hermes/commons/db/ocas-weave/weave.lbug'
+QUEUE = '/root/.hermes/commons/data/ocas-expansion/expansion_queue.json'
+CUTOFF = datetime.now(timezone.utc) - timedelta(days=180)
+
+db = lb.Database(DB, read_only=True)
+conn = lb.Connection(db)
+
+rows = list(conn.execute("""
+    MATCH (n:Person)
+    WHERE n.source_ref CONTAINS 'google-contacts'
+      AND n.name IS NOT NULL
+      AND n.name <> 'Test Person 2'
+    RETURN n.id, n.name, n.email, n.source_ref, n.notes
+    ORDER BY n.record_time DESC
+    LIMIT 50
+"""))
+
+def was_enriched_recently(notes, cutoff):
+    if not notes:
+        return False
+    for pattern in [r'\[scout_enriched:\s*(\d{4}-\d{2}-\d{2})\]',
+                    r'last_scout_enrichment:\s*(\d{4}-\d{2}-\d{2})']:
+        m = re.search(pattern, str(notes))
+        if m:
+            d = datetime.strptime(m.group(1), '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            if d > cutoff:
+                return True
+    return False
+
+seen, queue = set(), []
+for row in rows:
+    pid, name, email, src_ref, notes = row
+    if name.lower() in seen:
+        continue
+    if was_enriched_recently(notes, CUTOFF):
+        continue
+    seen.add(name.lower())
+    queue.append({'id': pid, 'name': name, 'email': email})
+
+conn.close()
+db.close()
+
+with open(QUEUE, 'w') as f:
+    json.dump(queue[:10], f, indent=2)
+```
+
+### expansion.run
+
+Executes the full pipeline. **Always call `expansion.build-queue` first.**
+
+Pipeline steps:
+1. Build queue (`expansion.build-queue`)
+2. Phase 1 Scout — OSINT via `ddgs`
+3. Phase 2 Sift — deep research via `ddgs`
+4. Phase 3 Weave — upsert + timestamp recording
+
+## Deduplication Rule
+
+**NEVER re-enrich a contact within 180 days unless the user explicitly requests it.**
+
+Re-enrichment is allowed only when:
+1. User explicitly names the contact (e.g., "re-enrich Jian He")
+2. 180+ days have passed since last enrichment
+
+The `source_ref` field is the primary dedup mechanism:
+- `google-contacts-sync` / `google-contacts-restore` → unenriched
+- `expansion_YYYYMMDD_scout` → enriched on that date
+
+The `notes` field is the safety valve — contains `| [scout_enriched: YYYY-MM-DD]` after each enrichment.
+
+## Input
+
+Reads targets from `{agent_root}/commons/data/ocas-expansion/expansion_queue.json`. After `expansion.build-queue` runs, this file contains 10 unenriched contacts with `{"id", "name", "email"}`.
+
+## Pipeline phases
+
+### Phase 1: Scout (Structural OSINT)
+
+Uses `ocas-scout` methodology. For each target:
+
+1. **Search via `ddgs` library** — Use the `ddgs` Python package directly in `execute_code` or `terminal`. Do NOT use `delegate_task` with browser tools — browser subagents get blocked by CAPTCHAs. Run all 10 targets in a single Python script for efficiency.
+2. **Search queries per person:**
+   - `\"{name} {employer}\"`
+   - `\"{name}\" LinkedIn`
+   - `\"{name}\" publications research`
+3. **Sanitize all text** — `re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', text)` before storing JSON or Cypher queries
+4. **Write results to file** — `scout_findings_YYYYMMDD.json` via `json.dump()` in script
+
+### Phase 2: Sift (Intellectual Deep Research)
+
+1. **Search via `ddgs`** — all 10 targets in one script
+2. **Deeper queries:**
+   - `\"{name}\" publications`
+   - `\"{name}\" conference talk`
+   - `\"{name}\" site:linkedin.com`
+3. **Extract domain_expertise** from result snippets
+4. **Write to file** — `sift_findings_YYYYMMDD.json`
+
+### Phase 3: Weave (Synthesis)
+
+1. **MERGE upsert** each Person node with enriched fields
+2. **Record enrichment timestamp** — append `| [scout_enriched: YYYY-MM-DD]` to `notes` field. LadybugDB cannot add new properties via SET, so encoding in `notes` is required.
+3. **Change `source_ref`** from `google-contacts-*` to `expansion_YYYYMMDD_scout` — this is the primary deduplication mechanism
+4. **Read-back verify** every upsert
+5. **Create Knows relationships** where evidence exists (co-author, same-org colleague, former colleague)
+
+## LadybugDB Integration Patterns
+
+**Use `lbug` CLI or `real_ladybug` Python API.** `lbug` CLI for one-off queries, Python API for scripts.
+
+### Key Patterns
+
+```python
+# Open database
+import real_ladybug as lb
+db = lb.Database('/root/.hermes/commons/db/ocas-weave/weave.lbug', read_only=False)
+conn = lb.Connection(db)
+
+# Upsert with enrichment tracking
+set_clauses = [
+    'p.source_ref = "expansion_20260417_scout"',
+    'p.confidence = 0.7',
+    'p.record_time = "' + datetime.now(timezone.utc).isoformat() + '"',
+]
+notes_enriched = existing_notes + '| [scout_enriched: 2026-04-17]' if existing_notes else '[scout_enriched: 2026-04-17]'
+set_clauses.append('p.notes = "' + notes_enriched + '"')
+
+query = 'MATCH (p:Person {id: "' + pid + '"}) SET ' + ', '.join(set_clauses)
+conn.execute(query)
+```
+
+### Critical Pitfalls
+
+1. **UUID hyphens in relationships** — LadybugDB parses hyphens as subtraction. Use **name-based matching** for relationship creation, not two UUIDs in one query:
+   ```python
+   # BAD
+   q = "MATCH (a {id: 'uuid1'}), (b {id: 'uuid2'}) CREATE (a)-[k]->(b)"
+   # GOOD
+   q = "MATCH (a:Person {name: '" + name1 + "'}), (b:Person {name: '" + name2 + "'}) CREATE (a)-[k]->(b)"
+   ```
+
+2. **No SET on non-existent properties** — LadybugDB cannot add new properties via SET. Encode new data in existing string properties (e.g., append to `notes`).
+
+3. **`read_only` on Database, not Connection** — `lb.Database(path, read_only=True)`, not `conn.execute(query, read_only=True)`.
+
+4. **Dense colleague graphs** — O(n²) edge creation. Limit to the current batch only.
+
+## Storage Layout
+
+```
+{agent_root}/commons/data/ocas-expansion/
+  expansion_queue.json          — current target list (overwritten each build-queue)
+  last_run_report.txt           — human-readable pipeline report
+  pipeline_completion_*.json    — machine-readable completion records
+  scout_findings_YYYYMMDD.json  — Phase 1 output
+  sift_findings_YYYYMMDD.json   — Phase 2 output
+  final_weave_synthesis.json    — Phase 3 output
+
+{agent_root}/commons/journals/ocas-expansion/
+  YYYY-MM-DD/
+    {run_id}.json
+```
+
+## Output
+
+1. `last_run_report.txt` — Executive Summary, per-phase tables, graph stats
+2. `pipeline_completion_*.json` — machine-readable completion record
+3. Scout/Sift/Weave data files
+4. Journal entry with `entities_observed` array
+
+## Run Completion Checklist
+
+- [ ] Queue built via `expansion.build-queue`
+- [ ] All targets processed through Scout
+- [ ] All targets processed through Sift
+- [ ] All Person nodes upserted with read-back verification
+- [ ] `source_ref` updated to `expansion_YYYYMMDD_scout` for each target
+- [ ] `[scout_enriched: YYYY-MM-DD]` appended to notes for each target
+- [ ] Knows relationships created (current batch only)
+- [ ] Graph stats recorded
+- [ ] `last_run_report.txt` written
+- [ ] `pipeline_completion_*.json` written
+- [ ] Journal written
+
+## OKRs
+
+```yaml
+skill_okrs:
+  - name: pipeline_completion_rate
+    metric: fraction of targets completing all 3 phases
+    direction: maximize
+    target: 0.90
+    evaluation_window: 10_runs
+  - name: scout_confidence_ratio
+    metric: fraction of targets with high Scout confidence
+    direction: maximize
+    target: 0.80
+    evaluation_window: 10_runs
+  - name: weave_readback_success
+    metric: fraction of upserts confirmed by read-back
+    direction: maximize
+    target: 1.0
+    evaluation_window: 10_runs
+  - name: relationship_evidence_ratio
+    metric: fraction of Knows edges with co-authorship or org-confirmed evidence
+    direction: maximize
+    target: 0.70
+    evaluation_window: 10_runs
+```
+
