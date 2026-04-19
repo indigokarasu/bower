@@ -1,15 +1,16 @@
 ---
 name: ocas-expansion
+version: "1.0.0"
+type: workflow
 description: >
   Graph Expansion Pipeline: orchestrates Scout → Sift → Weave for batch processing
   of people from the expansion queue. Reads targets from expansion_queue.json,
   runs structural OSINT (Scout), intellectual deep research (Sift), and social graph
   synthesis/upsert (Weave). Use for scheduled enrichment of the social graph with
   provenance-backed person profiles and relationships.
+author: Indigo Karasu
+email: mx.indigo.karasu@gmail.com
 metadata:
-  author: Indigo Karasu
-  email: mx.indigo.karasu@gmail.com
-  version: "1.3.0"
   hermes:
     tags: [expansion, pipeline, social-graph, research]
     category: signal
@@ -38,63 +39,13 @@ Builds `expansion_queue.json` from the Weave DB — **must run before every pipe
 **Deduplication is automatic and mandatory.** The system tracks enrichment via `source_ref`:
 - Contacts with `source_ref` containing `google-contacts` are **unenriched** (eligible for queue)
 - After enrichment, `source_ref` changes to `expansion_YYYYMMDD_scout` — automatically excluding them from future queries
-- A 180-day safety cutoff is also enforced via the `notes` field (parses `| [scout_enriched: YYYY-MM-DD]`)
+- A 180-day safety cutoff is also enforced via the `notes` field (parses `[scout_enriched: YYYY-MM-DD]`)
 
-Execute via LadybugDB CLI or Python API:
+Run `python scripts/build_expansion_queue.py` to rebuild the queue. The script opens the Weave LadybugDB read-only, filters by `source_ref` and the notes-based 180-day cutoff, dedupes by lowercased name, and writes the top 10 targets to `expansion_queue.json`. Override paths with `OCAS_WEAVE_DB` and `OCAS_EXPANSION_QUEUE` env vars.
+
+For ad hoc inspection without the script, use the `lbug` CLI:
 ```bash
 lbug "MATCH (n:Person) WHERE n.source_ref CONTAINS 'google-contacts' RETURN n.id, n.name, n.email ORDER BY n.record_time DESC LIMIT 10" /root/.hermes/commons/db/ocas-weave/weave.lbug
-```
-
-Or via Python API (real_ladybug):
-```python
-import real_ladybug as lb
-from datetime import datetime, timezone, timedelta
-import re, json
-
-DB = '/root/.hermes/commons/db/ocas-weave/weave.lbug'
-QUEUE = '/root/.hermes/commons/data/ocas-expansion/expansion_queue.json'
-CUTOFF = datetime.now(timezone.utc) - timedelta(days=180)
-
-db = lb.Database(DB, read_only=True)
-conn = lb.Connection(db)
-
-rows = list(conn.execute("""
-    MATCH (n:Person)
-    WHERE n.source_ref CONTAINS 'google-contacts'
-      AND n.name IS NOT NULL
-      AND n.name <> 'Test Person 2'
-    RETURN n.id, n.name, n.email, n.source_ref, n.notes
-    ORDER BY n.record_time DESC
-    LIMIT 50
-"""))
-
-def was_enriched_recently(notes, cutoff):
-    if not notes:
-        return False
-    for pattern in [r'\[scout_enriched:\s*(\d{4}-\d{2}-\d{2})\]',
-                    r'last_scout_enrichment:\s*(\d{4}-\d{2}-\d{2})']:
-        m = re.search(pattern, str(notes))
-        if m:
-            d = datetime.strptime(m.group(1), '%Y-%m-%d').replace(tzinfo=timezone.utc)
-            if d > cutoff:
-                return True
-    return False
-
-seen, queue = set(), []
-for row in rows:
-    pid, name, email, src_ref, notes = row
-    if name.lower() in seen:
-        continue
-    if was_enriched_recently(notes, CUTOFF):
-        continue
-    seen.add(name.lower())
-    queue.append({'id': pid, 'name': name, 'email': email})
-
-conn.close()
-db.close()
-
-with open(QUEUE, 'w') as f:
-    json.dump(queue[:10], f, indent=2)
 ```
 
 ### expansion.run
