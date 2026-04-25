@@ -20,10 +20,10 @@ metadata:
     category: interface
     cron:
       - name: "bower:scan"
-        schedule: "0 2 * * *"
+        schedule: "0 9 * * *"
         command: "bower.scan.light"
       - name: "bower:weekly-deep"
-        schedule: "0 1 * * 0"
+        schedule: "0 8 * * 0"
         command: "bower.scan.deep"
   openclaw:
     skill_type: system
@@ -42,10 +42,10 @@ metadata:
       requires_binaries: [gh, tar, python3]
     cron:
       - name: "bower:scan"
-        schedule: "0 2 * * *"
+        schedule: "0 9 * * *"
         command: "bower.scan.light"
       - name: "bower:weekly-deep"
-        schedule: "0 1 * * 0"
+        schedule: "0 8 * * 0"
         command: "bower.scan.deep"
 ---
 
@@ -717,6 +717,164 @@ python3 {agent_root}/commons/data/ocas-bower/import_old_scan.py
 - 49,622 files scanned (metadata)
 - ~900 content reads done (Google Docs primarily)
 - `scan_progress.json` shows `phase: file_scanning_in_progress`
+
+## Token Refresh (required before any Drive API calls)
+
+The Google token at `/root/.hermes/google_token.json` uses OAuth2 with a refresh_token. The `token` field (access_token) expires periodically. Before running any Drive API calls, refresh it:
+
+```python
+import json, urllib.request, urllib.parse
+from datetime import datetime, timezone, timedelta
+
+with open("/root/.hermes/google_token.json") as f:
+    td = json.load(f)
+
+data = urllib.parse.urlencode({
+    "client_id": td["client_id"],
+    "client_secret": td["client_secret"],
+    "refresh_token": td["refresh_token"],
+    "grant_type": "refresh_token"
+}).encode()
+
+req = urllib.request.Request(
+    td.get("token_uri", "https://oauth2.googleapis.com/token"),
+    data=data,
+    headers={"Content-Type": "application/x-www-form-urlencoded"}
+)
+with urllib.request.urlopen(req, timeout=30) as resp:
+    new_token = json.loads(resp.read())
+
+td["token"] = new_token["access_token"]
+td["expiry"] = (datetime.now(timezone.utc) + timedelta(seconds=new_token.get("expires_in", 3600))).isoformat()
+with open("/root/.hermes/google_token.json", "w") as f:
+    json.dump(td, f, indent=2)
+```
+
+Then use `td["token"]` as the Bearer token. Token format uses `token` field (not `access_token`).
+
+## Light Scan — What "Normal" Looks Like
+
+A typical light scan finds 2,000–4,000 recently modified items. Most are:
+- **System agent files**: `session_*.json`, `decisions.jsonl`, `config.json`, `messages.jsonl`, timestamped `.md` reports
+- **Agent skill artifacts**: `SKILL.md`, `.pyc` bytecode, `outbound_ckpt.txt`, drafts
+- **Automated backups**: Files inside timestamped folders like `2026-04-20_06-00-01/`
+
+Only ~1-2% are actual user content. Filter aggressively:
+```python
+system_patterns = ["session_", "decisions.jsonl", "config.json", "messages.jsonl",
+                   "issues.jsonl", "fixes.jsonl", "2026-04-", "ingest_", "main",
+                   "state.db", "agent.log", "gateway.pid", "chronicle.lbug",
+                   "weave.lbug", "FETCH_HEAD", ".git", "SKILL.md", "draft-",
+                   "esc-run-", "custodian-", "channel_", "gateway_", "outbound_ckpt"]
+```
+
+New folders created since last scan won't be in `folder_index.json`. Use Drive API to look up their names recursively (parent → grandparent) to trace full paths.
+
+## Status (2026-04-19) — Analysis Complete
+
+- 288,616 files scanned across 72,778 folders
+- 2,853 content summaries loaded
+- 10,288 proposals generated (8,666 moves, 152 renames, 1,470 description auto-writes)
+- 8 domains detected: medical, archive, home, projects, education, taxes, legal, finance
+- `scan_progress.json` shows `phase: analysis_complete`
+- `config.json` has `founding_run_complete: true`
+
+## Light Scan Lessons (2026-04-20)
+
+### Drive is overwhelmingly automated
+
+A light scan found 23,460 recently modified files. After classification:
+- **22,743** are Hermes backup artifacts (files inside timestamped dirs like `2026-04-20_06-00-01/`)
+- **717** are code repo artifacts (`node_modules`, `.git/objects`, compiled files)
+- **Only 1** was an actual user document
+
+Filter aggressively. Use these patterns to exclude automated content:
+```python
+# Timestamped backup folders (Hermes agent backups)
+hermes_re = re.compile(r"^20\d{2}-\d{2}-\d{2}_\d{2}-\d{2}")
+
+# Code repository markers
+code_markers = {"node_modules", "dist", ".git", "build", "__pycache__", "vendor",
+                "coverage", "compiled", "objects", "refs", "checkpoints"}
+
+# System file patterns
+system_patterns = ["session_", "decisions.jsonl", "config.json", "messages.jsonl",
+                   "issues.jsonl", "fixes.jsonl", "ingest_", "state.db", "agent.log",
+                   "gateway.pid", ".lbug", "FETCH_HEAD", "SKILL.md", "draft-",
+                   "esc-run-", "custodian-", "channel_", "gateway_", "outbound_ckpt",
+                   ".pyc", "__pycache__"]
+```
+
+### folder_index.json is incomplete for parent lookups
+
+The `folder_index.json` only contains ~72K folders from the original deep scan. Many parent IDs from Shared Drives, newer folders, or folders created by the agent are NOT in the index. When resolving parent paths during a light scan:
+- **Do NOT rely on folder_index.json** for parent name lookups
+- **Use the Drive API** to look up parent folder names directly: `GET /drive/v3/files/{parent_id}?fields=name`
+- Expect ~7,000+ unique parent IDs in a typical light scan; batch API lookups at 100/call with 0.3s delay
+
+### Proposals JSONL field names
+
+The `proposals.jsonl` uses `proposal_type` and `confidence_tier` (NOT `type` and `confidence`). When filtering/counting proposals:
+```python
+type_counts = Counter(p.get("proposal_type") for p in pending)
+tier_counts = Counter(p.get("confidence_tier") for p in pending)
+domain_counts = Counter(p.get("domain") for p in pending)
+```
+
+### Domain detection quality issues
+
+The 12,770 pending proposals have significant false positive rates:
+- Music MP3s classified as "taxes" (name pattern: "Graffiti Taxonomy")
+- Portfolio art classified as "medical" or "legal"
+- Python site-packages classified as "education"
+- Font files classified as "archive"
+
+These are `location_outlier` proposals with reasoning "File classified as location_outlier" — the domain assignment is based on weak filename heuristics, not content analysis. **Do NOT auto-approve without review.** Run `bower.simulate` on specific folders first.
+
+### Light scan output file
+
+Light scan results are saved to `{agent_root}/commons/data/ocas-bower/light_scan_latest.json` with structure:
+```json
+{
+  "scan_time": "ISO timestamp",
+  "query_since": "last light scan time",
+  "total_modified": 23460,
+  "system_filtered": 717,
+  "user_files_count": 22743,
+  "user_files": [{"id", "name", "mimeType", "parents", "modifiedTime", "starred", "size", "description"}]
+}
+```
+
+### Critical Lesson: No bower_analyze.py script exists
+
+The SKILL.md describes `bower.analyze` as if it were a CLI command, but **no executable script exists**. When running analysis:
+
+1. Check for existing scripts: `ls {agent_root}/commons/data/ocas-bower/*.py`
+2. If no `bower_analyze.py` exists, create it based on:
+   - `references/organization_rules.md` — all proposal generation rules
+   - `references/domains.md` — domain detection and prescriptive rules
+   - `references/analysis_schema.md` — data schemas
+
+3. The script must:
+   - Load all scan files from `scans/` directory
+   - Load content summaries from `content_summaries.jsonl`
+   - Build folder hierarchy from `folder_index.json`
+   - Build preference profile (naming, depth, density, sacred folders)
+   - Detect domains using vocabulary from `domains.md`
+   - Generate proposals (move, rename, describe_auto)
+   - Handle feedback suppressions from `feedback_log.jsonl`
+   - Expire old proposals from `proposals.jsonl`
+   - Update `drive_digest.json` with accurate file counts
+   - Write analysis event to `analysis_events.jsonl`
+
+4. Common errors to fix:
+   - f-string with backslash: use intermediate variable instead
+   - Timezone-aware vs naive datetime comparison: check `tzinfo` before comparing
+
+5. After analysis, update:
+   - `config.json`: set `founding_run_complete: true`
+   - `scan_progress.json`: set `phase: analysis_complete`
+   - `drive_digest.json`: update with actual file/folder counts
 
 
 
