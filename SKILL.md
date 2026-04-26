@@ -706,7 +706,7 @@ python3 {agent_root}/commons/data/ocas-bower/import_old_scan.py
 
 ## Google Drive API Notes
 
-- Token: `/root/.hermes/google_token.json` (Works, ~460 files/page)
+- Token: `/root/.hermes/indigo_google_credentials.json` (Works, ~460 files/page)
 - Google Docs: use `files().export_media()` NOT `get_media()`
 - Readable: `text/plain`, `text/html`, `text/csv`, `text/x-python`, `text/markdown`, `application/json`, `application/pdf`, `application/vnd.google-apps.document/spreadsheet/presentation`
 - Safe rate: ~12 calls/sec; above that gets HTTP 429 errors
@@ -720,37 +720,65 @@ python3 {agent_root}/commons/data/ocas-bower/import_old_scan.py
 
 ## Token Refresh (required before any Drive API calls)
 
-The Google token at `/root/.hermes/google_token.json` uses OAuth2 with a refresh_token. The `token` field (access_token) expires periodically. Before running any Drive API calls, refresh it:
+There are **multiple Google token files** with potentially different refresh tokens. Always check all of them:
+
+- `/root/.hermes/jared_google_credentials.json` — Jared's credentials (sometimes mismatched client_id)
+- `/root/.hermes/indigo_google_credentials.json` — Indigo Karasu account token
+- `/root/.hermes/jared_google_credentials.json` — Jared account token
+
+The `token` field (access_token) expires periodically. Before running any Drive API calls, attempt refresh on each token file:
 
 ```python
-import json, urllib.request, urllib.parse
+import json, urllib.request, urllib.parse, os
 from datetime import datetime, timezone, timedelta
 
-with open("/root/.hermes/google_token.json") as f:
-    td = json.load(f)
+token_paths = [
+    "/root/.hermes/jared_google_credentials.json",
+    "/root/.hermes/indigo_google_credentials.json",
+    "/root/.hermes/jared_google_credentials.json",
+]
 
-data = urllib.parse.urlencode({
-    "client_id": td["client_id"],
-    "client_secret": td["client_secret"],
-    "refresh_token": td["refresh_token"],
-    "grant_type": "refresh_token"
-}).encode()
+def try_refresh_token(path):
+    """Try to refresh a Google OAuth token. Returns (success: bool, token_data: dict)."""
+    if not os.path.exists(path):
+        return False, None
+    with open(path) as f:
+        td = json.load(f)
+    
+    data = urllib.parse.urlencode({
+        "client_id": td["client_id"],
+        "client_secret": td["client_secret"],
+        "refresh_token": td["refresh_token"],
+        "grant_type": "refresh_token"
+    }).encode()
+    
+    req = urllib.request.Request(
+        td.get("token_uri", "https://oauth2.googleapis.com/token"),
+        data=data,
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            new_token = json.loads(resp.read())
+        td["token"] = new_token["access_token"]
+        td["expiry"] = (datetime.now(timezone.utc) + timedelta(seconds=new_token.get("expires_in", 3600))).isoformat()
+        with open(path, "w") as f:
+            json.dump(td, f, indent=2)
+        return True, td
+    except urllib.error.HTTPError as e:
+        return False, None
 
-req = urllib.request.Request(
-    td.get("token_uri", "https://oauth2.googleapis.com/token"),
-    data=data,
-    headers={"Content-Type": "application/x-www-form-urlencoded"}
-)
-with urllib.request.urlopen(req, timeout=30) as resp:
-    new_token = json.loads(resp.read())
-
-td["token"] = new_token["access_token"]
-td["expiry"] = (datetime.now(timezone.utc) + timedelta(seconds=new_token.get("expires_in", 3600))).isoformat()
-with open("/root/.hermes/google_token.json", "w") as f:
-    json.dump(td, f, indent=2)
+for tp in token_paths:
+    success, td = try_refresh_token(tp)
+    print(f"{tp}: {'OK' if success else 'EXPIRED/REVOKED'}")
 ```
 
-Then use `td["token"]` as the Bearer token. Token format uses `token` field (not `access_token`).
+If **all** tokens fail with `invalid_grant`, the refresh tokens have been revoked/expired and the user needs to re-authenticate via OAuth. Use the helper script:
+```bash
+python3 /root/.hermes/skills/productivity/google-workspace/scripts/token_refresh.py
+```
+
+When all tokens fail and no Drive API access is possible, produce a **degraded status report** from cached Bower data (see `graceful-cron-auth-failure` skill for the degraded output pattern). Do not fail the cron job — the cached scan data remains useful for reporting.
 
 ## Light Scan — What "Normal" Looks Like
 
