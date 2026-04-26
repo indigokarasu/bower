@@ -14,7 +14,8 @@ from collections import defaultdict, Counter
 import hashlib
 
 # Configuration
-BOWER_DATA = Path("/root/.hermes/commons/data/ocas-bower")
+AGENT_ROOT = Path(os.environ.get("HERMES_HOME") or os.environ.get("OCAS_AGENT_ROOT") or Path.home() / ".hermes")
+BOWER_DATA = AGENT_ROOT / "commons/data/ocas-bower"
 SCANS_DIR = BOWER_DATA / "scans"
 CONTENT_SUMMARIES_PATH = BOWER_DATA / "content_summaries.jsonl"
 FOLDER_INDEX_PATH = BOWER_DATA / "folder_index.json"
