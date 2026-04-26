@@ -20,10 +20,10 @@ metadata:
     category: interface
     cron:
       - name: "bower:scan"
-        schedule: "0 2 * * *"
+        schedule: "0 9 * * *"
         command: "bower.scan.light"
       - name: "bower:weekly-deep"
-        schedule: "0 1 * * 0"
+        schedule: "0 8 * * 0"
         command: "bower.scan.deep"
   openclaw:
     skill_type: system
@@ -42,10 +42,10 @@ metadata:
       requires_binaries: [gh, tar, python3]
     cron:
       - name: "bower:scan"
-        schedule: "0 2 * * *"
+        schedule: "0 9 * * *"
         command: "bower.scan.light"
       - name: "bower:weekly-deep"
-        schedule: "0 1 * * 0"
+        schedule: "0 8 * * 0"
         command: "bower.scan.deep"
 ---
 
@@ -570,3 +570,585 @@ public
 ## Support file map
 
 This skill includes no external support files.
+
+
+---
+
+## Integrated: bower-scan-debug
+
+# Bower Deep Scan — Debug & Resume
+
+## Critical File Layout Facts
+
+### folder_index.json — Single JSON Object (Not JSONL)
+```json
+{"scan_timestamp":"...","total_folders":73900,"folders":[{"id":"...","name":"..."}]}
+```
+Load with `json.load(f)`, NOT line-by-line.
+
+### scans/ — Authoritative Source of Truth
+Each `.json` file = one scanned folder. Count files directly:
+```bash
+ls /root/.hermes/commons/data/ocas-bower/scans/ | wc -l
+```
+
+### scan_progress.json — Unreliable for Resume
+The `scanned_folders` array is often stale/empty even when `scans/` has files. Always use `scans/` as ground truth.
+
+## Diagnosis Commands
+
+```python
+# Count actual scanned folders
+import json
+from pathlib import Path
+scanned = len(list(Path("/root/.hermes/commons/data/ocas-bower/scans").glob("*.json")))
+
+# Total folders
+with open("/root/.hermes/commons/data/ocas-bower/folder_index.json") as f:
+    d = json.load(f)
+total = d.get("total_folders")
+remaining = total - scanned
+```
+
+## Resume Pattern
+
+```python
+from pathlib import Path
+import json
+
+scans_dir = Path("/root/.hermes/commons/data/ocas-bower/scans")
+folder_index = json.load(open("/root/.hermes/commons/data/ocas-bower/folder_index.json"))
+
+# Build scanned set from scans/ directory
+scanned_ids = {f.stem for f in scans_dir.glob("*.json")}
+
+# Find unscanned folders
+unscanned = [fd for fd in folder_index["folders"] if fd["id"] not in scanned_ids]
+```
+
+## Two-Phase Deep Scan
+
+**Phase 1**: Tree discovery → `folder_index.json`
+**Phase 2**: Scan each folder → `scans/{folder_id}.json`
+**Content enrichment**: `bower_read_contents.py` → `content_summaries.jsonl`
+
+All three produce distinct outputs. Proposal generation requires Phase 2 + content.
+
+## Scripts Location
+
+- `bower_resume_scan.py` — resumable folder scanner at:
+  `/root/.hermes/commons/data/ocas-bower/bower_resume_scan.py`
+- `bower_read_contents.py` — content enrichment at:
+  `/root/.hermes/commons/data/ocas-bower/bower_read_contents.py`
+- `bower_full_scan.py` (from backup):
+  `/root/.hermes/2026-04-06_21-34-18/data/hermes-bower/bower_scan_deep.py`
+
+## Run in Background
+
+```bash
+cd /root/.hermes/commons/data/ocas-bower
+nohup python3 bower_resume_scan.py > /tmp/bower_resume.log 2>&1 &
+echo "PID: $!"
+
+
+
+---
+
+## Integrated: bower-scan-debug-lessons
+
+# Bower Scan Debug Lessons
+
+## Problem
+Bower foundation scan (Phase 2: file content reading) never ran. The cron job `bower:weekly-deep` has never completed (`last_run: null`).
+
+## Root Causes
+
+### 1. SKILL.md is documentation, not code
+The SKILL.md describes `bower.scan.deep` and `bower.scan.light` as if they were CLI commands.
+In reality, the cron agent loads the SKILL.md and reads the documentation — it has NO executable code to run.
+**Fix:** Executable Python scripts must live in `{agent_root}/commons/data/ocas-bower/`. The cron agent must be told to run those scripts explicitly.
+
+### 2. Two different data paths
+- Old scan: `/root/.hermes/data/hermes-bower/structural_model.json` (46,150 files, complete from April 9)
+- New scan: `/root/.hermes/commons/data/ocas-bower/scans/` (target for ocas-bower)
+These were never bridged. Fixed by running `import_old_scan.py`.
+
+### 3. folder_index.json format mismatch
+The `analysis_schema.md` says `folder_index.json` has a `folders` dict keyed by ID.
+The ACTUAL format is a LIST of folder objects:
+```json
+{"folders": [{"id": "...", "name": "...", "parents": ["..."]}], "total_folders": 73900}
+```
+Root folders are folders whose ID is not in ANY other folder's `parents` list.
+
+## Findings About This User's Drive
+
+- **73,900 folders** in folder_index, but only ~961 with actual files
+- **~46,000 real files** (imported from old hermes-bower scan)
+- ~7,000 files are readable text/Google Docs
+- ~42,000 files are binary (images, videos, zip) — not content-readable
+- **Top folders**: timestamped backup folders (`/2026-04-09_06-00-01/` = 12,070 files)
+- **~460 files per API page** — full listing requires pagination
+- Full content scan takes 20+ minutes for all files
+
+## How to Run the Scan
+
+```bash
+# Phase 2: list all Drive files, group by root folder, write scans/
+python3 {agent_root}/commons/data/ocas-bower/bower_full_scan.py --read-content
+
+# Read content only for existing scans (after listing)
+python3 {agent_root}/commons/data/ocas-bower/bower_content_fast.py
+
+# Import old complete scan into new format
+python3 {agent_root}/commons/data/ocas-bower/import_old_scan.py
+```
+
+## Google Drive API Notes
+
+- Token: `/root/.hermes/indigo_google_credentials.json` (Works, ~460 files/page)
+- Google Docs: use `files().export_media()` NOT `get_media()`
+- Readable: `text/plain`, `text/html`, `text/csv`, `text/x-python`, `text/markdown`, `application/json`, `application/pdf`, `application/vnd.google-apps.document/spreadsheet/presentation`
+- Safe rate: ~12 calls/sec; above that gets HTTP 429 errors
+- PDFs via Drive API return binary — skip them
+
+## Status (2026-04-18)
+
+- 49,622 files scanned (metadata)
+- ~900 content reads done (Google Docs primarily)
+- `scan_progress.json` shows `phase: file_scanning_in_progress`
+
+## Token Refresh (required before any Drive API calls)
+
+There are **multiple Google token files** with potentially different refresh tokens. Always check all of them:
+
+- `/root/.hermes/jared_google_credentials.json` — Jared's credentials (sometimes mismatched client_id)
+- `/root/.hermes/indigo_google_credentials.json` — Indigo Karasu account token
+- `/root/.hermes/jared_google_credentials.json` — Jared account token
+
+The `token` field (access_token) expires periodically. Before running any Drive API calls, attempt refresh on each token file:
+
+```python
+import json, urllib.request, urllib.parse, os
+from datetime import datetime, timezone, timedelta
+
+token_paths = [
+    "/root/.hermes/jared_google_credentials.json",
+    "/root/.hermes/indigo_google_credentials.json",
+    "/root/.hermes/jared_google_credentials.json",
+]
+
+def try_refresh_token(path):
+    """Try to refresh a Google OAuth token. Returns (success: bool, token_data: dict)."""
+    if not os.path.exists(path):
+        return False, None
+    with open(path) as f:
+        td = json.load(f)
+    
+    data = urllib.parse.urlencode({
+        "client_id": td["client_id"],
+        "client_secret": td["client_secret"],
+        "refresh_token": td["refresh_token"],
+        "grant_type": "refresh_token"
+    }).encode()
+    
+    req = urllib.request.Request(
+        td.get("token_uri", "https://oauth2.googleapis.com/token"),
+        data=data,
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            new_token = json.loads(resp.read())
+        td["token"] = new_token["access_token"]
+        td["expiry"] = (datetime.now(timezone.utc) + timedelta(seconds=new_token.get("expires_in", 3600))).isoformat()
+        with open(path, "w") as f:
+            json.dump(td, f, indent=2)
+        return True, td
+    except urllib.error.HTTPError as e:
+        return False, None
+
+for tp in token_paths:
+    success, td = try_refresh_token(tp)
+    print(f"{tp}: {'OK' if success else 'EXPIRED/REVOKED'}")
+```
+
+If **all** tokens fail with `invalid_grant`, the refresh tokens have been revoked/expired and the user needs to re-authenticate via OAuth. Use the helper script:
+```bash
+python3 /root/.hermes/skills/productivity/google-workspace/scripts/token_refresh.py
+```
+
+When all tokens fail and no Drive API access is possible, produce a **degraded status report** from cached Bower data (see `graceful-cron-auth-failure` skill for the degraded output pattern). Do not fail the cron job — the cached scan data remains useful for reporting.
+
+## Light Scan — What "Normal" Looks Like
+
+A typical light scan finds 2,000–4,000 recently modified items. Most are:
+- **System agent files**: `session_*.json`, `decisions.jsonl`, `config.json`, `messages.jsonl`, timestamped `.md` reports
+- **Agent skill artifacts**: `SKILL.md`, `.pyc` bytecode, `outbound_ckpt.txt`, drafts
+- **Automated backups**: Files inside timestamped folders like `2026-04-20_06-00-01/`
+
+Only ~1-2% are actual user content. Filter aggressively:
+```python
+system_patterns = ["session_", "decisions.jsonl", "config.json", "messages.jsonl",
+                   "issues.jsonl", "fixes.jsonl", "2026-04-", "ingest_", "main",
+                   "state.db", "agent.log", "gateway.pid", "chronicle.lbug",
+                   "weave.lbug", "FETCH_HEAD", ".git", "SKILL.md", "draft-",
+                   "esc-run-", "custodian-", "channel_", "gateway_", "outbound_ckpt"]
+```
+
+New folders created since last scan won't be in `folder_index.json`. Use Drive API to look up their names recursively (parent → grandparent) to trace full paths.
+
+## Status (2026-04-19) — Analysis Complete
+
+- 288,616 files scanned across 72,778 folders
+- 2,853 content summaries loaded
+- 10,288 proposals generated (8,666 moves, 152 renames, 1,470 description auto-writes)
+- 8 domains detected: medical, archive, home, projects, education, taxes, legal, finance
+- `scan_progress.json` shows `phase: analysis_complete`
+- `config.json` has `founding_run_complete: true`
+
+## Light Scan Lessons (2026-04-20)
+
+### Drive is overwhelmingly automated
+
+A light scan found 23,460 recently modified files. After classification:
+- **22,743** are Hermes backup artifacts (files inside timestamped dirs like `2026-04-20_06-00-01/`)
+- **717** are code repo artifacts (`node_modules`, `.git/objects`, compiled files)
+- **Only 1** was an actual user document
+
+Filter aggressively. Use these patterns to exclude automated content:
+```python
+# Timestamped backup folders (Hermes agent backups)
+hermes_re = re.compile(r"^20\d{2}-\d{2}-\d{2}_\d{2}-\d{2}")
+
+# Code repository markers
+code_markers = {"node_modules", "dist", ".git", "build", "__pycache__", "vendor",
+                "coverage", "compiled", "objects", "refs", "checkpoints"}
+
+# System file patterns
+system_patterns = ["session_", "decisions.jsonl", "config.json", "messages.jsonl",
+                   "issues.jsonl", "fixes.jsonl", "ingest_", "state.db", "agent.log",
+                   "gateway.pid", ".lbug", "FETCH_HEAD", "SKILL.md", "draft-",
+                   "esc-run-", "custodian-", "channel_", "gateway_", "outbound_ckpt",
+                   ".pyc", "__pycache__"]
+```
+
+### folder_index.json is incomplete for parent lookups
+
+The `folder_index.json` only contains ~72K folders from the original deep scan. Many parent IDs from Shared Drives, newer folders, or folders created by the agent are NOT in the index. When resolving parent paths during a light scan:
+- **Do NOT rely on folder_index.json** for parent name lookups
+- **Use the Drive API** to look up parent folder names directly: `GET /drive/v3/files/{parent_id}?fields=name`
+- Expect ~7,000+ unique parent IDs in a typical light scan; batch API lookups at 100/call with 0.3s delay
+
+### Proposals JSONL field names
+
+The `proposals.jsonl` uses `proposal_type` and `confidence_tier` (NOT `type` and `confidence`). When filtering/counting proposals:
+```python
+type_counts = Counter(p.get("proposal_type") for p in pending)
+tier_counts = Counter(p.get("confidence_tier") for p in pending)
+domain_counts = Counter(p.get("domain") for p in pending)
+```
+
+### Domain detection quality issues
+
+The 12,770 pending proposals have significant false positive rates:
+- Music MP3s classified as "taxes" (name pattern: "Graffiti Taxonomy")
+- Portfolio art classified as "medical" or "legal"
+- Python site-packages classified as "education"
+- Font files classified as "archive"
+
+These are `location_outlier` proposals with reasoning "File classified as location_outlier" — the domain assignment is based on weak filename heuristics, not content analysis. **Do NOT auto-approve without review.** Run `bower.simulate` on specific folders first.
+
+### Light scan output file
+
+Light scan results are saved to `{agent_root}/commons/data/ocas-bower/light_scan_latest.json` with structure:
+```json
+{
+  "scan_time": "ISO timestamp",
+  "query_since": "last light scan time",
+  "total_modified": 23460,
+  "system_filtered": 717,
+  "user_files_count": 22743,
+  "user_files": [{"id", "name", "mimeType", "parents", "modifiedTime", "starred", "size", "description"}]
+}
+```
+
+### Critical Lesson: No bower_analyze.py script exists
+
+The SKILL.md describes `bower.analyze` as if it were a CLI command, but **no executable script exists**. When running analysis:
+
+1. Check for existing scripts: `ls {agent_root}/commons/data/ocas-bower/*.py`
+2. If no `bower_analyze.py` exists, create it based on:
+   - `references/organization_rules.md` — all proposal generation rules
+   - `references/domains.md` — domain detection and prescriptive rules
+   - `references/analysis_schema.md` — data schemas
+
+3. The script must:
+   - Load all scan files from `scans/` directory
+   - Load content summaries from `content_summaries.jsonl`
+   - Build folder hierarchy from `folder_index.json`
+   - Build preference profile (naming, depth, density, sacred folders)
+   - Detect domains using vocabulary from `domains.md`
+   - Generate proposals (move, rename, describe_auto)
+   - Handle feedback suppressions from `feedback_log.jsonl`
+   - Expire old proposals from `proposals.jsonl`
+   - Update `drive_digest.json` with accurate file counts
+   - Write analysis event to `analysis_events.jsonl`
+
+4. Common errors to fix:
+   - f-string with backslash: use intermediate variable instead
+   - Timezone-aware vs naive datetime comparison: check `tzinfo` before comparing
+
+5. After analysis, update:
+   - `config.json`: set `founding_run_complete: true`
+   - `scan_progress.json`: set `phase: analysis_complete`
+   - `drive_digest.json`: update with actual file/folder counts
+
+
+
+---
+
+## Integrated: ocas-expansion
+
+# Expansion Pipeline
+
+Orchestrates the three-phase enrichment pipeline: Scout (Structural OSINT) → Sift (Intellectual Deep Research) → Weave (Synthesis & Graph Upsert). Processes targets from `expansion_queue.json`, enriching each person's profile with provenance-backed findings and updating the Weave social graph.
+
+## When to use
+
+- Scheduled cron enrichment of the social graph
+- Batch processing of new contacts/leads from the expansion queue
+- Re-enrichment of existing person nodes with fresh OSINT data
+
+## Commands
+
+### expansion.build-queue
+
+Builds `expansion_queue.json` from the Weave DB — **must run before every pipeline execution**. Queries LadybugDB directly to find unenriched contacts, excluding anyone processed in the last 180 days.
+
+**Deduplication is automatic and mandatory.** The system tracks enrichment via `source_ref`:
+- Contacts with `source_ref` containing `google-contacts` are **unenriched** (eligible for queue)
+- After enrichment, `source_ref` changes to `expansion_YYYYMMDD_scout` — automatically excluding them from future queries
+- A 180-day safety cutoff is also enforced via the `notes` field (parses `| [scout_enriched: YYYY-MM-DD]`)
+
+Execute via LadybugDB CLI or Python API:
+```bash
+lbug "MATCH (n:Person) WHERE n.source_ref CONTAINS 'google-contacts' RETURN n.id, n.name, n.email ORDER BY n.record_time DESC LIMIT 10" /root/.hermes/commons/db/ocas-weave/weave.lbug
+```
+
+Or via Python API (real_ladybug):
+```python
+import real_ladybug as lb
+from datetime import datetime, timezone, timedelta
+import re, json
+
+DB = '/root/.hermes/commons/db/ocas-weave/weave.lbug'
+QUEUE = '/root/.hermes/commons/data/ocas-expansion/expansion_queue.json'
+CUTOFF = datetime.now(timezone.utc) - timedelta(days=180)
+
+db = lb.Database(DB, read_only=True)
+conn = lb.Connection(db)
+
+rows = list(conn.execute("""
+    MATCH (n:Person)
+    WHERE n.source_ref CONTAINS 'google-contacts'
+      AND n.name IS NOT NULL
+      AND n.name <> 'Test Person 2'
+    RETURN n.id, n.name, n.email, n.source_ref, n.notes
+    ORDER BY n.record_time DESC
+    LIMIT 50
+"""))
+
+def was_enriched_recently(notes, cutoff):
+    if not notes:
+        return False
+    for pattern in [r'\[scout_enriched:\s*(\d{4}-\d{2}-\d{2})\]',
+                    r'last_scout_enrichment:\s*(\d{4}-\d{2}-\d{2})']:
+        m = re.search(pattern, str(notes))
+        if m:
+            d = datetime.strptime(m.group(1), '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            if d > cutoff:
+                return True
+    return False
+
+seen, queue = set(), []
+for row in rows:
+    pid, name, email, src_ref, notes = row
+    if name.lower() in seen:
+        continue
+    if was_enriched_recently(notes, CUTOFF):
+        continue
+    seen.add(name.lower())
+    queue.append({'id': pid, 'name': name, 'email': email})
+
+conn.close()
+db.close()
+
+with open(QUEUE, 'w') as f:
+    json.dump(queue[:10], f, indent=2)
+```
+
+### expansion.run
+
+Executes the full pipeline. **Always call `expansion.build-queue` first.**
+
+Pipeline steps:
+1. Build queue (`expansion.build-queue`)
+2. Phase 1 Scout — OSINT via `ddgs`
+3. Phase 2 Sift — deep research via `ddgs`
+4. Phase 3 Weave — upsert + timestamp recording
+
+## Deduplication Rule
+
+**NEVER re-enrich a contact within 180 days unless the user explicitly requests it.**
+
+Re-enrichment is allowed only when:
+1. User explicitly names the contact (e.g., "re-enrich Jian He")
+2. 180+ days have passed since last enrichment
+
+The `source_ref` field is the primary dedup mechanism:
+- `google-contacts-sync` / `google-contacts-restore` → unenriched
+- `expansion_YYYYMMDD_scout` → enriched on that date
+
+The `notes` field is the safety valve — contains `| [scout_enriched: YYYY-MM-DD]` after each enrichment.
+
+## Input
+
+Reads targets from `{agent_root}/commons/data/ocas-expansion/expansion_queue.json`. After `expansion.build-queue` runs, this file contains 10 unenriched contacts with `{"id", "name", "email"}`.
+
+## Pipeline phases
+
+### Phase 1: Scout (Structural OSINT)
+
+Uses `ocas-scout` methodology. For each target:
+
+1. **Search via `ddgs` library** — Use the `ddgs` Python package directly in `execute_code` or `terminal`. Do NOT use `delegate_task` with browser tools — browser subagents get blocked by CAPTCHAs. Run all 10 targets in a single Python script for efficiency.
+2. **Search queries per person:**
+   - `\"{name} {employer}\"`
+   - `\"{name}\" LinkedIn`
+   - `\"{name}\" publications research`
+3. **Sanitize all text** — `re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', text)` before storing JSON or Cypher queries
+4. **Write results to file** — `scout_findings_YYYYMMDD.json` via `json.dump()` in script
+
+### Phase 2: Sift (Intellectual Deep Research)
+
+1. **Search via `ddgs`** — all 10 targets in one script
+2. **Deeper queries:**
+   - `\"{name}\" publications`
+   - `\"{name}\" conference talk`
+   - `\"{name}\" site:linkedin.com`
+3. **Extract domain_expertise** from result snippets
+4. **Write to file** — `sift_findings_YYYYMMDD.json`
+
+### Phase 3: Weave (Synthesis)
+
+1. **MERGE upsert** each Person node with enriched fields
+2. **Record enrichment timestamp** — append `| [scout_enriched: YYYY-MM-DD]` to `notes` field. LadybugDB cannot add new properties via SET, so encoding in `notes` is required.
+3. **Change `source_ref`** from `google-contacts-*` to `expansion_YYYYMMDD_scout` — this is the primary deduplication mechanism
+4. **Read-back verify** every upsert
+5. **Create Knows relationships** where evidence exists (co-author, same-org colleague, former colleague)
+
+## LadybugDB Integration Patterns
+
+**Use `lbug` CLI or `real_ladybug` Python API.** `lbug` CLI for one-off queries, Python API for scripts.
+
+### Key Patterns
+
+```python
+# Open database
+import real_ladybug as lb
+db = lb.Database('/root/.hermes/commons/db/ocas-weave/weave.lbug', read_only=False)
+conn = lb.Connection(db)
+
+# Upsert with enrichment tracking
+set_clauses = [
+    'p.source_ref = "expansion_20260417_scout"',
+    'p.confidence = 0.7',
+    'p.record_time = "' + datetime.now(timezone.utc).isoformat() + '"',
+]
+notes_enriched = existing_notes + '| [scout_enriched: 2026-04-17]' if existing_notes else '[scout_enriched: 2026-04-17]'
+set_clauses.append('p.notes = "' + notes_enriched + '"')
+
+query = 'MATCH (p:Person {id: "' + pid + '"}) SET ' + ', '.join(set_clauses)
+conn.execute(query)
+```
+
+### Critical Pitfalls
+
+1. **UUID hyphens in relationships** — LadybugDB parses hyphens as subtraction. Use **name-based matching** for relationship creation, not two UUIDs in one query:
+   ```python
+   # BAD
+   q = "MATCH (a {id: 'uuid1'}), (b {id: 'uuid2'}) CREATE (a)-[k]->(b)"
+   # GOOD
+   q = "MATCH (a:Person {name: '" + name1 + "'}), (b:Person {name: '" + name2 + "'}) CREATE (a)-[k]->(b)"
+   ```
+
+2. **No SET on non-existent properties** — LadybugDB cannot add new properties via SET. Encode new data in existing string properties (e.g., append to `notes`).
+
+3. **`read_only` on Database, not Connection** — `lb.Database(path, read_only=True)`, not `conn.execute(query, read_only=True)`.
+
+4. **Dense colleague graphs** — O(n²) edge creation. Limit to the current batch only.
+
+## Storage Layout
+
+```
+{agent_root}/commons/data/ocas-expansion/
+  expansion_queue.json          — current target list (overwritten each build-queue)
+  last_run_report.txt           — human-readable pipeline report
+  pipeline_completion_*.json    — machine-readable completion records
+  scout_findings_YYYYMMDD.json  — Phase 1 output
+  sift_findings_YYYYMMDD.json   — Phase 2 output
+  final_weave_synthesis.json    — Phase 3 output
+
+{agent_root}/commons/journals/ocas-expansion/
+  YYYY-MM-DD/
+    {run_id}.json
+```
+
+## Output
+
+1. `last_run_report.txt` — Executive Summary, per-phase tables, graph stats
+2. `pipeline_completion_*.json` — machine-readable completion record
+3. Scout/Sift/Weave data files
+4. Journal entry with `entities_observed` array
+
+## Run Completion Checklist
+
+- [ ] Queue built via `expansion.build-queue`
+- [ ] All targets processed through Scout
+- [ ] All targets processed through Sift
+- [ ] All Person nodes upserted with read-back verification
+- [ ] `source_ref` updated to `expansion_YYYYMMDD_scout` for each target
+- [ ] `[scout_enriched: YYYY-MM-DD]` appended to notes for each target
+- [ ] Knows relationships created (current batch only)
+- [ ] Graph stats recorded
+- [ ] `last_run_report.txt` written
+- [ ] `pipeline_completion_*.json` written
+- [ ] Journal written
+
+## OKRs
+
+```yaml
+skill_okrs:
+  - name: pipeline_completion_rate
+    metric: fraction of targets completing all 3 phases
+    direction: maximize
+    target: 0.90
+    evaluation_window: 10_runs
+  - name: scout_confidence_ratio
+    metric: fraction of targets with high Scout confidence
+    direction: maximize
+    target: 0.80
+    evaluation_window: 10_runs
+  - name: weave_readback_success
+    metric: fraction of upserts confirmed by read-back
+    direction: maximize
+    target: 1.0
+    evaluation_window: 10_runs
+  - name: relationship_evidence_ratio
+    metric: fraction of Knows edges with co-authorship or org-confirmed evidence
+    direction: maximize
+    target: 0.70
+    evaluation_window: 10_runs
+```
+
