@@ -14,7 +14,7 @@ description: >
 metadata:
   author: Indigo Karasu
   email: mx.indigo.karasu@gmail.com
-  "1.4.5"
+  version: "1.4.5"
   hermes:
     tags: [organization, google-drive, files]
     category: interface
