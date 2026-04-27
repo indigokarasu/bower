@@ -78,6 +78,9 @@ Each domain can operate in prescriptive mode (moves toward a canonical structure
 
 ## Changelog
 
+
+### v1.4.5 — April 26, 2026
+- Version alignment per spec-ocas-skill-publishing.md (no functional change)
 ### v1.4.3 — April 12, 2026
 - Generalized Google Drive MCP reference to platform-agnostic capability description
 
