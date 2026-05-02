@@ -1,17 +1,6 @@
----
-name: bower-mempalace-ingest
-description: >
-  Ingest Bower (Google Drive scan) data into MemPalace. Extracts domain
-  structures, content themes, health/finance/travel topics, and people
-  references from Bower's scan data and files them as MemPalace drawers
-  and knowledge graph facts. Designed to run as a cron job after Bower's
-  weekly deep scan.
-metadata:
-  author: Indigo Karasu
-  version: "1.0.0"
----
+# MemPalace Ingestion
 
-# Bower → MemPalace Ingestion
+Extract insights from Bower's Google Drive scan data and file them in MemPalace for long-term agent memory.
 
 ## Purpose
 
@@ -39,10 +28,10 @@ Bower scan (Sunday 01:00 PT)
 ## Script Location
 
 ```
-~/.hermes/commons/data/ocas-bower/bower_mem_ingest.py
+{agent_root}/commons/data/ocas-bower/scripts/bower_mem_ingest.py
 ```
 
-Output: `~/.hermes/commons/data/ocas-bower/mem_ingest_output.json`
+Output: `{agent_root}/commons/data/ocas-bower/mem_ingest_output.json`
 
 ## What Gets Extracted
 
@@ -62,7 +51,41 @@ wing: bower
   room: scan-2026-04-15-findings — initial deep analysis
 ```
 
-## Cron Job
+## Usage
+
+### Manual Run
+```python
+# In execute_code
+exec(open('{agent_root}/commons/data/ocas-bower/scripts/bower_mem_ingest.py').read())
+
+# Check output
+import json
+with open('{agent_root}/commons/data/ocas-bower/mem_ingest_output.json') as f:
+    output = json.load(f)
+print(json.dumps(output, indent=2)[:1000])
+```
+
+### File to MemPalace
+After the script runs, use MCP tools to file the output:
+
+```python
+# File main content drawer
+mcp_mempalace_mempalace_add_drawer(
+    wing="bower", 
+    room="scan-updates",
+    content=output['main_content']
+)
+
+# Add KG facts
+for fact in output['kg_facts']:
+    mcp_mempalace_mempalace_kg_add(
+        subject=fact['subject'],
+        predicate=fact['predicate'], 
+        object=fact['object']
+    )
+```
+
+## Cron Integration
 
 - **Name**: `bower-mempalace-ingest`
 - **Schedule**: `0 3 * * 1` (Monday 03:00 UTC, after Sunday Bower deep scan)
@@ -75,17 +98,3 @@ wing: bower
 2. **Content summaries are gold** — the 5,310 LLM summaries contain personal insights (health, travel, people). Raw file metadata alone is not useful for MemPalace.
 3. **KG facts for queryability** — domains, places visited, medical providers as graph facts enable `mcp_mempalace_mempalace_kg_query("Jared")`.
 4. **Script outputs JSON, cron files it** — MCP tools can't be called from `execute_code`. Two-phase design: extract (Python) → file (cron agent with MCP access).
-
-## Manual Run
-
-```bash
-# Extract insights
-python3 ~/.hermes/commons/data/ocas-bower/bower_mem_ingest.py
-
-# Check output
-cat ~/.hermes/commons/data/ocas-bower/mem_ingest_output.json | python3 -m json.tool | head -50
-```
-
-To file manually into MemPalace, use the MCP tools:
-- `mcp_mempalace_mempalace_add_drawer` (wing="bower", room="scan-updates")
-- `mcp_mempalace_mempalace_kg_add` (for each fact in the `kg_facts` array)

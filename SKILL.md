@@ -225,7 +225,9 @@ Signal files are written to the `signal` payload field in the journal entry. Bow
 
 `bower.feedback.clear [--pattern key] [--all]` — Clears learned suppression patterns or demotions.
 
-`bower.status [--trend]` — Prints SkillStatus: last scan time, preference profile summary, active domains, quiet mode state, drift rate, proposal counts by tier and type, auto-approved pattern count, suppressed class list, last apply run, caps remaining, any errors. With `--trend`: shows Drive health score over the last 8 weeks.
+**bower.mempalace.ingest** — Ingest Bower scan data into MemPalace. Extract domain structures, content themes, health/finance/travel topics, and people references from Bower's scan data and file them as MemPalace drawers and knowledge graph facts. Uses `scripts/bower_mem_ingest.py` to extract insights and `mcp_mempalace` tools to file them. Designed to run as a cron job after Bower's weekly deep scan.
+
+**bower.status** — Report current state. Last scan time, preference profile summary, active domains, quiet mode state, drift rate, proposal counts by tier and type, auto-approved pattern count, suppressed class list, last apply run, caps remaining, any errors. If data files exist but commands fail, falls back to reading JSONL files directly to generate status report from raw data.
 
 `bower.init` — Initializes storage, registers background jobs, writes default config. Runs automatically on first use. On first run, prompts: "Run founding scan? This will scan your Drive in batches. Large Drives may take several sessions to complete. Progress is saved automatically."
 
@@ -569,7 +571,13 @@ public
 
 ## Support file map
 
-This skill includes no external support files.
+| File | When to read |
+|------|-------------|
+| `references/organization_rules.md` | Before every `bower.analyze` run; defines preference inference, pattern promotion, taxonomy inference, all proposal generation rules, permission lookup, feedback suppression, recalibration, scan resume, cap behavior, digest format, and review narrative |
+| `references/domains.md` | Before every `bower.analyze` run; defines domain detection, prescriptive/descriptive mode, canonical structures, and per-domain filing rules for Taxes, Projects, Home, Finance, Legal, Medical, Archive, Education |
+| `references/analysis_schema.md` | Before `bower.scan.deep` or `bower.analyze`; defines all data schemas including preference profile, folder_index, scan_progress, proposals, move log, undo log, feedback log, and config |
+| `references/mempalace_ingestion.md` | Before `bower.mempalace.ingest`; defines extraction and filing pipeline from Bower scan data to MemPalace |
+| `scripts/bower_mem_ingest.py` | For MemPalace ingestion after weekly deep scan |
 
 
 ---
