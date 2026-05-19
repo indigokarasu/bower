@@ -589,7 +589,7 @@ Load with `json.load(f)`, NOT line-by-line.
 ### scans/ — Authoritative Source of Truth
 Each `.json` file = one scanned folder. Count files directly:
 ```bash
-ls <hermes-root>/commons/data/ocas-bower/scans/ | wc -l
+ls {agent_root}/commons/data/ocas-bower/scans/ | wc -l
 ```
 
 ### scan_progress.json — Unreliable for Resume
@@ -601,10 +601,10 @@ The `scanned_folders` array is often stale/empty even when `scans/` has files. A
 # Count actual scanned folders
 import json
 from pathlib import Path
-scanned = len(list(Path("<hermes-root>/commons/data/ocas-bower/scans").glob("*.json")))
+scanned = len(list(Path("{agent_root}/commons/data/ocas-bower/scans").glob("*.json")))
 
 # Total folders
-with open("<hermes-root>/commons/data/ocas-bower/folder_index.json") as f:
+with open("{agent_root}/commons/data/ocas-bower/folder_index.json") as f:
     d = json.load(f)
 total = d.get("total_folders")
 remaining = total - scanned
@@ -616,8 +616,8 @@ remaining = total - scanned
 from pathlib import Path
 import json
 
-scans_dir = Path("<hermes-root>/commons/data/ocas-bower/scans")
-folder_index = json.load(open("<hermes-root>/commons/data/ocas-bower/folder_index.json"))
+scans_dir = Path("{agent_root}/commons/data/ocas-bower/scans")
+folder_index = json.load(open("{agent_root}/commons/data/ocas-bower/folder_index.json"))
 
 # Build scanned set from scans/ directory
 scanned_ids = {f.stem for f in scans_dir.glob("*.json")}
@@ -637,16 +637,16 @@ All three produce distinct outputs. Proposal generation requires Phase 2 + conte
 ## Scripts Location
 
 - `bower_resume_scan.py` — resumable folder scanner at:
-  `<hermes-root>/commons/data/ocas-bower/bower_resume_scan.py`
+  `{agent_root}/commons/data/ocas-bower/bower_resume_scan.py`
 - `bower_read_contents.py` — content enrichment at:
-  `<hermes-root>/commons/data/ocas-bower/bower_read_contents.py`
+  `{agent_root}/commons/data/ocas-bower/bower_read_contents.py`
 - `bower_full_scan.py` (from backup):
-  `<hermes-root>/2026-04-06_21-34-18/data/hermes-bower/bower_scan_deep.py`
+  `{agent_root}/2026-04-06_21-34-18/data/hermes-bower/bower_scan_deep.py`
 
 ## Run in Background
 
 ```bash
-cd <hermes-root>/commons/data/ocas-bower
+cd {agent_root}/commons/data/ocas-bower
 nohup python3 bower_resume_scan.py > /tmp/bower_resume.log 2>&1 &
 echo "PID: $!"
 
@@ -669,8 +669,8 @@ In reality, the cron agent loads the SKILL.md and reads the documentation — it
 **Fix:** Executable Python scripts must live in `{agent_root}/commons/data/ocas-bower/`. The cron agent must be told to run those scripts explicitly.
 
 ### 2. Two different data paths
-- Old scan: `<hermes-root>/data/hermes-bower/structural_model.json` (46,150 files, complete from April 9)
-- New scan: `<hermes-root>/commons/data/ocas-bower/scans/` (target for ocas-bower)
+- Old scan: `{agent_root}/data/hermes-bower/structural_model.json` (46,150 files, complete from April 9)
+- New scan: `{agent_root}/commons/data/ocas-bower/scans/` (target for ocas-bower)
 These were never bridged. Fixed by running `import_old_scan.py`.
 
 ### 3. folder_index.json format mismatch
@@ -706,7 +706,7 @@ python3 {agent_root}/commons/data/ocas-bower/import_old_scan.py
 
 ## Google Drive API Notes
 
-- Token: `<hermes-root>/indigo_google_credentials.json` (Works, ~460 files/page)
+- Token: `{agent_root}/indigo_google_credentials.json` (Works, ~460 files/page)
 - Google Docs: use `files().export_media()` NOT `get_media()`
 - Readable: `text/plain`, `text/html`, `text/csv`, `text/x-python`, `text/markdown`, `application/json`, `application/pdf`, `application/vnd.google-apps.document/spreadsheet/presentation`
 - Safe rate: ~12 calls/sec; above that gets HTTP 429 errors
@@ -722,9 +722,9 @@ python3 {agent_root}/commons/data/ocas-bower/import_old_scan.py
 
 There are **multiple Google token files** with potentially different refresh tokens. Always check all of them:
 
-- `<hermes-root>/owner_google_credentials.json` — owner's credentials (sometimes mismatched client_id)
-- `<hermes-root>/indigo_google_credentials.json` — Indigo Karasu account token
-- `<hermes-root>/owner_google_credentials.json` — owner account token
+- `{agent_root}/owner_google_credentials.json` — owner's credentials (sometimes mismatched client_id)
+- `{agent_root}/indigo_google_credentials.json` — Indigo Karasu account token
+- `{agent_root}/owner_google_credentials.json` — owner account token
 
 The `token` field (access_token) expires periodically. Before running any Drive API calls, attempt refresh on each token file:
 
@@ -733,9 +733,9 @@ import json, urllib.request, urllib.parse, os
 from datetime import datetime, timezone, timedelta
 
 token_paths = [
-    "<hermes-root>/owner_google_credentials.json",
-    "<hermes-root>/indigo_google_credentials.json",
-    "<hermes-root>/owner_google_credentials.json",
+    "{agent_root}/owner_google_credentials.json",
+    "{agent_root}/indigo_google_credentials.json",
+    "{agent_root}/owner_google_credentials.json",
 ]
 
 def try_refresh_token(path):
@@ -775,7 +775,7 @@ for tp in token_paths:
 
 If **all** tokens fail with `invalid_grant`, the refresh tokens have been revoked/expired and the user needs to re-authenticate via OAuth. Use the helper script:
 ```bash
-python3 <hermes-root>/skills/productivity/google-workspace/scripts/token_refresh.py
+python3 {agent_root}/skills/productivity/google-workspace/scripts/token_refresh.py
 ```
 
 When all tokens fail and no Drive API access is possible, produce a **degraded status report** from cached Bower data (see `graceful-cron-auth-failure` skill for the degraded output pattern). Do not fail the cron job — the cached scan data remains useful for reporting.
@@ -933,7 +933,7 @@ Builds `expansion_queue.json` from the Weave DB — **must run before every pipe
 
 Execute via LadybugDB CLI or Python API:
 ```bash
-lbug "MATCH (n:Person) WHERE n.source_ref CONTAINS 'google-contacts' RETURN n.id, n.name, n.email ORDER BY n.record_time DESC LIMIT 10" <hermes-root>/commons/db/ocas-weave/weave.lbug
+lbug "MATCH (n:Person) WHERE n.source_ref CONTAINS 'google-contacts' RETURN n.id, n.name, n.email ORDER BY n.record_time DESC LIMIT 10" {agent_root}/commons/db/ocas-weave/weave.lbug
 ```
 
 Or via Python API (real_ladybug):
@@ -942,8 +942,8 @@ import real_ladybug as lb
 from datetime import datetime, timezone, timedelta
 import re, json
 
-DB = '<hermes-root>/commons/db/ocas-weave/weave.lbug'
-QUEUE = '<hermes-root>/commons/data/ocas-expansion/expansion_queue.json'
+DB = '{agent_root}/commons/db/ocas-weave/weave.lbug'
+QUEUE = '{agent_root}/commons/data/ocas-expansion/expansion_queue.json'
 CUTOFF = datetime.now(timezone.utc) - timedelta(days=180)
 
 db = lb.Database(DB, read_only=True)
@@ -1057,7 +1057,7 @@ Uses `ocas-scout` methodology. For each target:
 ```python
 # Open database
 import real_ladybug as lb
-db = lb.Database('<hermes-root>/commons/db/ocas-weave/weave.lbug', read_only=False)
+db = lb.Database('{agent_root}/commons/db/ocas-weave/weave.lbug', read_only=False)
 conn = lb.Connection(db)
 
 # Upsert with enrichment tracking
