@@ -587,7 +587,6 @@ public
 
 This skill includes no external support files.
 
-
 ---
 
 ## Integrated: bower-scan-debug
@@ -665,8 +664,7 @@ All three produce distinct outputs. Proposal generation requires Phase 2 + conte
 cd {agent_root}/commons/data/ocas-bower
 nohup python3 bower_resume_scan.py > /tmp/bower_resume.log 2>&1 &
 echo "PID: $!"
-
-
+```
 
 ---
 
@@ -760,14 +758,14 @@ def try_refresh_token(path):
         return False, None
     with open(path) as f:
         td = json.load(f)
-    
+
     data = urllib.parse.urlencode({
         "client_id": td["client_id"],
         "client_secret": td["client_secret"],
         "refresh_token": td["refresh_token"],
         "grant_type": "refresh_token"
     }).encode()
-    
+
     req = urllib.request.Request(
         td.get("token_uri", "https://oauth2.googleapis.com/token"),
         data=data,
@@ -919,8 +917,6 @@ The SKILL.md describes `bower.analyze` as if it were a CLI command, but **no exe
    - `config.json`: set `founding_run_complete: true`
    - `scan_progress.json`: set `phase: analysis_complete`
    - `drive_digest.json`: update with actual file/folder counts
-
-
 
 ---
 
@@ -1167,4 +1163,3 @@ skill_okrs:
     target: 0.70
     evaluation_window: 10_runs
 ```
-
