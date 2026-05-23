@@ -1,4 +1,4 @@
-# 🏹 Bower
+# 🦜 Bower
 
 > **Automatic Google Drive organizer — scans, categorizes, and reorganizes your files.**
 
