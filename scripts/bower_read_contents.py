@@ -12,12 +12,12 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 # Auth
-TOKEN_PATHS = [
-    Path.home() / ".hermes" / "google_token.json",
-    Path.home() / ".hermes" / "owner_google_token.json",
-]
+import sys as _sys
+_sys.path.insert(0, str(Path.home() / '.hermes' / 'scripts'))
+from google_auth_mcp import get_drive_service
 
-# MIME types that are readable
+def get_drive():
+    return get_drive_service()
 READABLE_MIME = {
     'text/plain', 'text/html', 'text/csv', 'text/x-python',
     'text/x-sh', 'text/x-script.python', 'text/markdown',
@@ -44,25 +44,6 @@ EXPORT_MIME = {
     'application/vnd.google-apps.presentation': 'text/plain',
     'application/vnd.google-apps.drawing': 'image/png',
 }
-
-
-def get_drive():
-    for tp in TOKEN_PATHS:
-        if tp.exists():
-            try:
-                from google.oauth2.credentials import Credentials
-                from googleapiclient.discovery import build
-                creds = Credentials.from_authorized_user_file(str(tp))
-                if creds.expired:
-                    from google.auth.transport.requests import Request
-                    creds.refresh(Request())
-                drive = build('drive', 'v3', credentials=creds)
-                drive.files().list(pageSize=1, fields='files(id)').execute()
-                return drive
-            except Exception as e:
-                print(f'Token {tp} failed: {e}', file=sys.stderr)
-                continue
-    return None
 
 
 def read_content(drive, file_rec):
