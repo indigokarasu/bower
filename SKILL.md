@@ -1,17 +1,19 @@
 ---
 name: ocas-bower
-description: 'Bower: automatic Google Drive organizer. Scans Drive structure and file
-  contents, builds a personalized preference profile, applies domain-specific logic
-  (taxes by year, projects by name, home by system, finance by institution, etc.),
-  and executes non-destructive moves, renames, and description writes in the background.
-  Learns your organizational style over time and auto-approves patterns you''ve consistently
-  accepted. Never deletes files. Trigger phrases: ''organize my Drive'', ''clean up
-  my Google Drive'', ''what''s disorganized in my Drive'', ''show me what Bower found'',
-  ''run a Drive scan'', ''apply the pending Bower proposals''. Do not use for web
-  research (use Sift), document analysis (use Sift), or Chronicle ingestion (use Elephas).
-
-  '
+description: >
+  Automatic Google Drive organizer. Scans Drive structure and file contents, builds
+  a personalized preference profile, applies domain-specific logic (taxes by year,
+  projects by name, home by system, finance by institution, etc.), and executes
+  non-destructive moves, renames, and description writes in the background. Learns
+  your organizational style over time and auto-approves patterns you've consistently
+  accepted. Never deletes files.
+  Trigger: "organize my Drive", "clean up my Google Drive", "what's disorganized",
+  "run a Drive scan", "apply Bower proposals", Drive organization.
+  NOT for web research, document analysis, or Chronicle ingestion.
 license: MIT
+includes:
+  - references/**
+  - scripts/**
 metadata:
   author: Indigo Karasu
   version: 1.4.5
@@ -69,7 +71,7 @@ For full JSON schema examples, see `references/signal_examples.md`.
 | `bower.apply` | Execute approved proposals. `--dry-run` to preview. |
 | `bower.undo` | Reverse moves, renames, description writes. |
 | `bower.preferences.show` | Display preference profile. |
-| `bower.preferences.lock` | Lock a preference field or pattern. |
+| `bower.preferences.lock` | Mark a preference field or pattern as fixed (prevents auto-inference from overwriting it). |
 | `bower.preferences.quiet` | Toggle quiet mode (suppresses digest only). |
 | `bower.feedback.clear` | Clear suppression patterns or demotions. |
 | `bower.status` | SkillStatus summary. `--trend` for 8-week health. |
