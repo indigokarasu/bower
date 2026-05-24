@@ -71,7 +71,7 @@ For full JSON schema examples, see `references/signal_examples.md`.
 
 `bower.proposals.reject [--ids p_xxx,p_yyy]` — Rejects specific proposals and records feedback. Rejected patterns are suppressed and may trigger demotion.
 
-`bower.apply [--dry-run]` — Executes all approved and auto-approved proposals (up to `apply_cap`) and all description auto-writes (up to `describe_auto_cap`). Each proposal staleness-checked immediately before execution. With `--dry-run`, shows the digest without touching Drive.
+`bower.apply [--dry-run]` — Executes pending proposals that have been approved by the user (up to `apply_cap`) and description writes to empty fields (up to `describe_auto_cap`). Each proposal is staleness-checked immediately before execution. With `--dry-run`, previews the digest without touching Drive.
 
 `bower.undo [--ids mvl_xxx,mvl_yyy] [--last N]` — Reverses executed moves, renames, and description writes. Triggers pattern demotion if the undone proposal was auto-approved.
 
@@ -103,6 +103,8 @@ Read-only scan of specified folder → apply full analysis pipeline → print na
 
 ### Apply run
 Description auto-writes first → sort by confidence tier → apply `apply_cap` → per-proposal staleness check → execute via Google Drive → log to `move_log.jsonl` → produce digest (suppressed in quiet mode if all succeeded) → write Action Journal.
+
+**Verification after apply**: After `bower.apply` completes, read back applied proposal IDs from `move_log.jsonl` and confirm each file exists at its new destination via Google Drive list. Report any mismatches (file not found at destination) as failed moves. Verify the move log entry count matches the number of executed proposals.
 
 ### Undo run
 Read move log records → staleness check → restore `previous_value` → execute reversal → log to `undo_log.jsonl` → record feedback → trigger pattern demotion if auto-approved → write Action Journal.
