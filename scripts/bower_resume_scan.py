@@ -21,7 +21,7 @@ SCAN_PROGRESS = BOWER_DATA / "scan_progress.json"
 
 # Central auth
 sys.path.insert(0, str(HERMES_HOME / 'scripts'))
-from google_auth_mcp import get_drive_service
+from Google auth import get_drive_service
 
 def get_drive():
     return get_drive_service()

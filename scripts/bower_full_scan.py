@@ -19,8 +19,8 @@ import hashlib
 from pathlib import Path
 from datetime import datetime, timezone
 
-# Use MCP credentials directory
-CREDS_DIR = Path('/root/.google_workspace_mcp/credentials')
+# Google OAuth credentials — use the central google_auth helper or direct API access
+CREDS_DIR = Path.home() / '.hermes' / 'credentials'
 TOKEN_PATH = CREDS_DIR / 'google-workspace-user.json'
 BOWER_DATA = Path.home() / ".hermes" / "commons/data" / "ocas-bower"
 JOURNALS_DIR = Path.home() / ".hermes" / "commons/journals" / "ocas-bower"

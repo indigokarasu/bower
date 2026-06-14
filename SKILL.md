@@ -1,23 +1,32 @@
 ---
 name: ocas-bower
-description: >
-  Automatic Google Drive organizer. Scans Drive structure and file contents, builds
-  a personalized preference profile, applies domain-specific logic (taxes by year,
-  projects by name, home by system, finance by institution, etc.), and executes
-  non-destructive moves, renames, and description writes in the background. Learns
-  your organizational style over time and auto-approves patterns you've consistently
-  accepted. Never deletes files.
-  Trigger: "organize my Drive", "clean up my Google Drive", "what's disorganized",
-  "run a Drive scan", "apply Bower proposals", Drive organization.
-  NOT for web research, document analysis, or Chronicle ingestion.
+description: Automatic Google Drive organizer. Scans Drive structure and file contents,
+  builds a personalized preference profile, applies domain-specific logic (taxes by
+  year, projects by name, home by system, finance by institution), and executes non-destructive
+  moves, renames, and description writes. Learns organizational style over time and
+  auto-approves consistently accepted patterns. Never deletes files. NOT for web research,
+  document analysis, or Chronicle ingestion.
 license: MIT
+source: https://github.com/indigokarasu/bower
 includes:
-  - references/**
-  - scripts/**
+- references/**
+- scripts/**
 metadata:
-  author: Indigo Karasu
-  version: 1.4.5
+  author: Indigo Karasu (indigokarasu)
+  version: 1.4.6
 ---
+
+## Interactive Menu
+
+When invoked interactively, present a two-level menu. See `references/interactive-menu.md` for the full menu structure.
+
+## When to Use
+
+- Google Drive cleanup and organization
+- Duplicate file detection and merging
+- Folder structure optimization
+- Preference-based auto-organization rules
+- Drive health monitoring and reporting
 
 # Bower
 
@@ -35,11 +44,19 @@ Bower keeps Google Drive organized without ever deleting anything. It learns you
 - "Turn on quiet mode" / "Run silently"
 - Bower's background scan job fires on schedule
 
+## When NOT to Use
+
+- Deleting files — Bower never deletes
+- Managing sharing permissions — Bower doesn't touch permissions
+- Creating top-level taxonomy from scratch — Bower infers from existing structure
+- Interacting with non-Drive storage — Bower is Drive-only
+- Applying domain logic to undetected domains — needs 5+ files or 2+ subfolders to activate
+- Web research or document analysis — use Sift
+- Chronicle ingestion — use Elephas
+
 ## Responsibility boundary
 
 Bower does: scan Drive structure and file contents, build a preference profile from evidence, detect and apply domain-specific organization logic, identify outliers, propose folder moves, renames, and description writes, auto-approve promoted patterns, apply approved changes using the system's Google Drive access, maintain a full audit trail.
-
-Bower does not: delete files, manage sharing permissions, create top-level taxonomy from scratch (it infers from what exists), interact with any non-Drive storage, apply domain logic to a domain it hasn't detected as clearly started.
 
 Adjacent responsibility: Sift handles web research and document analysis. Elephas handles Chronicle ingestion and receives Bower's entity signals. Bower does not depend on either but emits signals to Elephas for all Drive artifacts and entities encountered during scans.
 
@@ -111,26 +128,7 @@ Read these reference files before the operations they govern:
 | `references/domains.md` | Before every `bower.analyze` run; defines domain detection, prescriptive/descriptive mode, canonical structures, and per-domain filing rules for Taxes, Projects, Home, Finance, Legal, Medical, Archive, Education |
 | `references/analysis_schema.md` | Before `bower.scan.deep` or `bower.analyze`; defines all data schemas including preference profile, folder_index, scan_progress, proposals, move log, undo log, feedback log, and config |
 
-Key invariants:
-- Never propose a delete.
-- Never move a starred file unless confidence is high and destination is unambiguous.
-- Never flatten a folder with 3+ children.
-- Never propose a move into a non-existent folder without a preceding create_folder proposal.
-- Renames are `high` confidence only.
-- Description overwrites require approval. Auto-writes to empty fields do not.
-- Domain logic runs before generic outlier logic per file. Not both.
-- Prescriptive domain logic only applies when domain is clearly started (5+ files or 2+ subfolders in domain root).
-- Always preserve `previous_value` in move_log before any overwrite.
-- Always run staleness check per-proposal immediately before execution.
-- Auto-approved proposals still pass staleness gate and permission check.
-- Arrival detection auto-approves only high-confidence pattern matches. Med-confidence matches stay pending.
-- Founding run batch approval grants immediate pattern promotion credit for all executed proposals.
-- Simulation writes nothing: no proposals, no logs, no journal, no state changes of any kind.
-- Quiet mode suppresses digest output only. It never changes what requires approval.
-- Load feedback suppressions and recalibration data before every `bower.analyze` run.
-- Rebuild preference profile on every deep scan; respect locked fields.
-- Medical file highlights in apply digest and simulation output: folder path and count only, never filenames or content.
-- Full file text must never appear in logs, journals, or output.
+See `references/decision-invariants.md` for the full list of safety invariants.
 
 ## Scan output
 
@@ -188,57 +186,11 @@ Implements the recovery contract from `spec-ocas-recovery.md`.
 
 ## Storage layout
 
-```
-{agent_root}/commons/data/ocas-bower/
-  config.json
-  folder_index.json           -- full folder tree with paths, depths, permissions
-  drive_digest.json           -- lightweight holistic Drive summary
-  scan_progress.json          -- scan state: folders done/pending, resume point
-  scans/                      -- one file per top-level folder tree
-    {folder_id}.json
-    _root.json                 -- files at Drive root with no parent folder
-  preference_profile.json     -- inferred preferences, domains, patterns, class precision
-  proposals.jsonl             -- all proposals: pending, approved, executed, failed, skipped, expired
-  move_log.jsonl              -- record of every executed operation with previous_value
-  undo_log.jsonl              -- record of every executed undo
-  feedback_log.jsonl          -- user undo and reject events for suppression/demotion learning
-  scan_events.jsonl           -- scan run history
-  analysis_events.jsonl       -- analysis run history
-  health_history.jsonl        -- weekly Drive health score snapshots
-  decisions.jsonl             -- DecisionRecords
-  intents.jsonl               -- durable intent queue (append-only)
-  evidence.jsonl              -- execution evidence log (append-only)
-  reports/                    -- dated apply digest Markdown files
-
-{agent_root}/commons/journals/ocas-bower/
-  YYYY-MM-DD/{run_id}.json
-```
+See `references/storage-layout.md` for the full directory structure.
 
 ## OKRs
 
-```yaml
-skill_okrs:
-  - name: proposal_precision
-    metric: fraction of executed proposals not subsequently undone
-    direction: maximize
-    target: 0.80
-    evaluation_window: 30_runs
-  - name: apply_success_rate
-    metric: fraction of approved proposals successfully applied
-    direction: maximize
-    target: 0.95
-    evaluation_window: 30_runs
-  - name: auto_approve_precision
-    metric: fraction of auto-approved proposals not subsequently undone
-    direction: maximize
-    target: 0.90
-    evaluation_window: 30_runs
-  - name: data_integrity
-    metric: fraction of Drive scans that pass schema validation
-    direction: maximize
-    target: 1.00
-    evaluation_window: 30_runs
-```
+See `references/okrs.md` for all targets (folder coverage, proposal accuracy, user preference learning, schedule adherence, data integrity).
 
 Tracked metrics: `proposal_precision` (≥0.80), `apply_success_rate` (≥0.95), `staleness_skip_rate` (≤0.05), `auto_approve_precision` (≥0.90), `false_positive_rate` (≤0.10), `scan_coverage` (1.0), `proposal_expiry_rate` (≤0.20), plus tracking-only: `content_influence_rate`, `description_coverage_rate`, `domain_proposal_rate`, `feedback_suppression_rate`.
 
@@ -256,14 +208,21 @@ public
 
 ## Gotchas
 
+- **Stale data after major Drive changes** — Between scans, the Drive may be cleaned up, migrated, or restructured catastrophically (e.g., 381K files → 17). When a deep scan detects a >50% change in total file/folder count compared to `scan_progress.json` or `drive_digest.json`, treat the previous scan data as stale: reset `scan_progress.json` to `phase: complete` with the new counts, update `drive_digest.json` with new totals, and add a `scan_notes` field documenting the change. Do NOT carry forward old proposals — the old `proposals.jsonl` records reference file/folders that may no longer exist. Let the new scan drive fresh proposals. Optionally archive old scan data (`scans/`, `proposals.jsonl`) to a dated archive directory.
+- **Cron jobs cannot use `execute_code`** — Scheduled cron runs (light and deep scans on this profile) execute in an isolated context where `execute_code` is blocked. All scan logic must use native Hermes tools (List Google Drive files, Search Google Drive, `write_file`, `terminal` with `>>` for `.jsonl` append). Do not write Python scripts that expect to be run via `execute_code` for scheduled work. The `scripts/` directory is for interactive/scripted runs only.
 - **Drift threshold aborts light scans** — If the light scan detects significant structural drift, it aborts entirely rather than producing partial results. A subsequent deep scan is needed to re-establish the baseline.
 - **Staleness checks execute per-proposal** — Even auto-approved, high-confidence proposals pass through a staleness check immediately before execution. A file moved between scan and apply can cause a proposal to quietly skip.
 - **Permission fetch suppresses all move proposals** — If folder permissions are unavailable (API error or scope missing), Bower suppresses *all* move proposals for that folder—not just the affected files—and falls back to description-only suggestions.
 - **Simulation writes absolutely nothing** — `bower.simulate` produces no proposals, logs, journals, or state changes. It is safe to run repeatedly but provides no persistent output.
 - **Medical file redaction** — Medical folder contents are never logged, journaled, or surfaced by filename. Only folder paths and file counts appear in apply digests and simulation output.
 - **Quiet mode suppresses only the digest** — Enabling quiet mode hides the apply digest output but does not bypass approval requirements, staleness checks, or any safety gate.
+- **Small Drive below domain thresholds** — When the Drive has fewer than 5 files or 2 subfolders total, no domain logic activates. Analysis falls entirely on generic outlier rules (depth outliers, name inconsistencies). This is expected — report the Drive as "too small for domain detection" and focus proposals on obvious misplacements (files at root that belong in named folders, duplicate filenames).
 
-## Support file map
+- **write_file overwrites — use terminal >> for .jsonl append** — The `write_file` tool always overwrites the entire file. For append-only logs (`scan_events.jsonl`, `evidence.jsonl`, `move_log.jsonl`, `undo_log.jsonl`, `feedback_log.jsonl`, `proposals.jsonl`, `health_history.jsonl`, `decisions.jsonl`, `intents.jsonl`, `analysis_events.jsonl`), use `terminal` with `>>` to append, or build the full content and write once. Accidentally overwriting these files destroys history. When appending scan events or evidence entries, prefer: `terminal` > `command: "cat >> path.jsonl << 'EOF'\n{...}\nEOF"` . Never use `write_file` on a `.jsonl` unless you intend to replace the entire file.
+
+- **OAuth invalid_grant — creds.valid lies, token is unusable** — When the OAuth refresh token is revoked/expired, `google.oauth2.credentials.Credentials.valid` may return `True` even though the token is rejected by the API (HTTP 401). The `google_auth.py` helper attempts auto-refresh, which then fails with `invalid_grant: Bad Request`. This is a permanent failure — the refresh token will not recover without user interaction. Handle it at the scan entry point: catch `RefreshError` and `HTTPError 401`, write `degraded: google_drive` to `evidence.jsonl`, write an aborted scan event to `scan_events.jsonl`, enter degraded mode using last known state from `scan_progress.json`, and report. Do NOT retry within the same run. See `references/scan-debug.md` for the full diagnosis recipe. If `get_service()` raises `RuntimeError` ("No valid Google credentials found"), that is the same condition surfacing through a different path — handle identically.
+
+## Support File Map
 
 | File | When to read |
 |------|-------------|
@@ -273,6 +232,7 @@ public
 | `references/signal_examples.md` | Before emitting signals to Elephas; JSON schema examples for all five signal types |
 | `references/scan-debug.md` | When debugging scan issues, resume failures, or light scan anomalies |
 | `references/command_reference.md` | When you need full command flag descriptions and semantics |
+| `references/decision-invariants.md` | Before every `bower.analyze` or `bower.apply` run; safety invariants that govern all operations |
 
 ## Scan Debug & Operational Notes
 

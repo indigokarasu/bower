@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 # Auth
 import sys as _sys
 _sys.path.insert(0, str(Path.home() / '.hermes' / 'scripts'))
-from google_auth_mcp import get_drive_service
+from Google auth import get_drive_service
 
 def get_drive():
     return get_drive_service()
