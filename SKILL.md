@@ -130,6 +130,19 @@ Read these reference files before the operations they govern:
 
 See `references/decision-invariants.md` for the full list of safety invariants.
 
+### Light scan structural baseline check (MANDATORY)
+
+Before running the `modifiedTime` query in `bower.scan.light`, ALWAYS perform a structural baseline comparison:
+
+1. Query root-level items: `GOOGLEDRIVE_FIND_FILE` with `q="'root' in parents and trashed = false"`, `pageSize=10`
+2. Compare counts against `drive_digest.json` → `root_level_file_count` and `root_level_folder_count`
+3. If root-level counts differ by more than 15% from the stored baseline, **flag structural drift immediately** — before processing the `modifiedTime` query results
+4. If drift exceeds threshold, abort the light scan, write `drift_detected` to `scan_events.jsonl`, and request a deep scan
+
+**Why this matters (2026-06-14 incident):** A Drive restructuring placed 89+ files and 12+ folders at root level. All files had `modifiedTime` dates before the last scan's cutoff, so the `modifiedTime` query returned 0 results. The drift was invisible to the light scan. Only a root-level count comparison caught it. Without this check, the light scan would have reported "no new files" while the Drive was completely restructured.
+
+**Cron implementation:** The `pageSize=10` query is fast (~2s). If `nextPageToken` is present, root has 100+ items — immediately compare against baseline. Do not wait for full pagination.
+
 ## Scan output
 
 `bower.scan.deep` produces: `folder_index.json` (Phase 1), `scans/{folder_id}.json` per folder tree (Phase 2), `drive_digest.json` (updated per folder), `scan_progress.json`, scan event in `scan_events.jsonl`.
@@ -218,9 +231,13 @@ public
 - **Quiet mode suppresses only the digest** — Enabling quiet mode hides the apply digest output but does not bypass approval requirements, staleness checks, or any safety gate.
 - **Small Drive below domain thresholds** — When the Drive has fewer than 5 files or 2 subfolders total, no domain logic activates. Analysis falls entirely on generic outlier rules (depth outliers, name inconsistencies). This is expected — report the Drive as "too small for domain detection" and focus proposals on obvious misplacements (files at root that belong in named folders, duplicate filenames).
 
+- **Light scan misses bulk-moved files** — The `bower.scan.light` queries by `modifiedTime`, which only catches files *modified* since the last scan. Files that were bulk-moved or bulk-created without recent modification timestamps are invisible to this query. The mandatory structural baseline check (root-level count comparison) before the `modifiedTime` query catches this. Without it, a completely restructured Drive can be reported as "no new files." See the "Light scan structural baseline check" section above.
+
 - **write_file overwrites — use terminal >> for .jsonl append** — The `write_file` tool always overwrites the entire file. For append-only logs (`scan_events.jsonl`, `evidence.jsonl`, `move_log.jsonl`, `undo_log.jsonl`, `feedback_log.jsonl`, `proposals.jsonl`, `health_history.jsonl`, `decisions.jsonl`, `intents.jsonl`, `analysis_events.jsonl`), use `terminal` with `>>` to append, or build the full content and write once. Accidentally overwriting these files destroys history. When appending scan events or evidence entries, prefer: `terminal` > `command: "cat >> path.jsonl << 'EOF'\n{...}\nEOF"` . Never use `write_file` on a `.jsonl` unless you intend to replace the entire file.
 
 - **OAuth invalid_grant — creds.valid lies, token is unusable** — When the OAuth refresh token is revoked/expired, `google.oauth2.credentials.Credentials.valid` may return `True` even though the token is rejected by the API (HTTP 401). The `google_auth.py` helper attempts auto-refresh, which then fails with `invalid_grant: Bad Request`. This is a permanent failure — the refresh token will not recover without user interaction. Handle it at the scan entry point: catch `RefreshError` and `HTTPError 401`, write `degraded: google_drive` to `evidence.jsonl`, write an aborted scan event to `scan_events.jsonl`, enter degraded mode using last known state from `scan_progress.json`, and report. Do NOT retry within the same run. See `references/scan-debug.md` for the full diagnosis recipe. If `get_service()` raises `RuntimeError` ("No valid Google credentials found"), that is the same condition surfacing through a different path — handle identically.
+
+- **Large Drive founding scans timeout** — On Drives with 10K+ items, a full founding deep scan (`bower.scan.deep --founding`) can exceed the 10-minute cron timeout during folder/file enumeration. The Drive API may also return 500 Internal Errors under heavy pagination load. Solution: use a **sampled deep scan** strategy (see `references/large-drive-scanning.md`): enumerate root-level items fully, then sample up to 300 files per root folder (3 pages × 100). Set `scan_coverage: 0.5` in `drive_digest.json` and add `scan_notes` documenting the approach. The weekly deep scan will fill in full enumeration. Always wrap Drive API list calls with exponential backoff for 500/503 errors.
 
 ## Support File Map
 
@@ -233,6 +250,8 @@ public
 | `references/scan-debug.md` | When debugging scan issues, resume failures, or light scan anomalies |
 | `references/command_reference.md` | When you need full command flag descriptions and semantics |
 | `references/decision-invariants.md` | Before every `bower.analyze` or `bower.apply` run; safety invariants that govern all operations |
+| `references/large-drive-scanning.md` | When founding deep scan on Drive with >10K items or cron timeout; sampled scan strategy, 500 error handling, trade-offs |
+| `references/drift-incident-2026-06-14.md` | When light scan detects major drift; lessons from 2026-06-14 restructuring incident, why modifiedTime-only queries miss bulk moves |
 
 ## Scan Debug & Operational Notes
 
