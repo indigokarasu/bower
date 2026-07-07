@@ -1,19 +1,25 @@
 ---
 name: ocas-bower
+license: MIT
+source: https://github.com/indigokarasu/bower
 description: Automatic Google Drive organizer. Scans Drive structure and file contents,
   builds a personalized preference profile, applies domain-specific logic (taxes by
   year, projects by name, home by system, finance by institution), and executes non-destructive
   moves, renames, and description writes. Learns organizational style over time and
   auto-approves consistently accepted patterns. Never deletes files. NOT for web research,
   document analysis, or Chronicle ingestion.
-license: MIT
-source: https://github.com/indigokarasu/bower
 includes:
 - references/**
 - scripts/**
 metadata:
   author: Indigo Karasu (indigokarasu)
   version: 1.4.6
+triggers:
+- google drive
+- drive organizer
+- file organization
+- drive cleanup
+- auto-organize
 ---
 
 ## Interactive Menu
@@ -31,6 +37,8 @@ When invoked interactively, present a two-level menu. See `references/interactiv
 # Bower
 
 Bower keeps Google Drive organized without ever deleting anything. It learns your organizational style from your existing structure, applies domain-native logic where it detects known domains, builds a personalized preference profile, and over time auto-approves patterns you consistently accept. The goal: you go to sleep and wake up to a Drive that looks the way you would have organized it yourself.
+
+**Current status (June 2026):** Founding deep scan completed 2026-06-28. Drive has 516 files across 6 root folders (Bookshelf, Archive, Home, Projects, Professional, Authenticator Backups) with 1,235 total folders at depth ≤4. 61 proposals generated (7 high, 54 med). 3 domains detected: archive, home, projects. Auto-approval has not yet triggered — requires proposal review/approval to seed the promotion cycle. Drive root is clean (0 loose files). Main value: monitoring drift, confirming health, and executing approved proposals.
 
 ## Trigger conditions
 
@@ -52,25 +60,25 @@ Bower keeps Google Drive organized without ever deleting anything. It learns you
 - Interacting with non-Drive storage — Bower is Drive-only
 - Applying domain logic to undetected domains — needs 5+ files or 2+ subfolders to activate
 - Web research or document analysis — use Sift
-- Chronicle ingestion — use Elephas
+- Chronicle ingestion
 
 ## Responsibility boundary
 
 Bower does: scan Drive structure and file contents, build a preference profile from evidence, detect and apply domain-specific organization logic, identify outliers, propose folder moves, renames, and description writes, auto-approve promoted patterns, apply approved changes using the system's Google Drive access, maintain a full audit trail.
 
-Adjacent responsibility: Sift handles web research and document analysis. Elephas handles Chronicle ingestion and receives Bower's entity signals. Bower does not depend on either but emits signals to Elephas for all Drive artifacts and entities encountered during scans.
+Adjacent responsibility: Sift handles web research and document analysis. Bower emits entity signals in journal payloads for Chronicle ingestion for all Drive artifacts and entities encountered during scans.
 
 ## Ontology types
 
-- **Thing/DigitalArtifact** — Drive files and folders that Bower scans, classifies, and organizes. Bower emits Signals to Elephas for all discovered Drive artifacts.
+- **Thing/DigitalArtifact** — Drive files and folders that Bower scans, classifies, and organizes. Bower includes signals in journal payloads for all discovered Drive artifacts.
 - **Entity/Person** — People referenced in documents, shared-with metadata, and collaborators encountered during scans.
 - **Place** — Locations found in documents (travel documents, address lists, venue information).
 - **Concept/Event** — Events, projects, or topics that documents are about (e.g., a folder of wedding planning docs, a project kickoff deck).
 - **Concept/Idea** — Themes and topics reflected by folder structure and document content (e.g., recurring interest in machine learning across multiple folders).
 
-## Signal emission to Elephas
+## Signal emission
 
-Bower emits structured signals to Elephas for all entities and artifacts encountered during scans. All signals carry `user_relevance: "user"`. Five signal types are emitted: Thing/DigitalArtifact, Entity/Person, Place, Concept/Event, Concept/Idea. One signal per unique artifact/entity, deduplicated by `file_id` (artifacts) or email (persons). Signals are written to the `signal` payload field during `bower.scan.deep` and `bower.scan.light`.
+Bower includes structured signals in journal payloads for all entities and artifacts encountered during scans. All signals carry `user_relevance: "user"`. Five signal types are emitted: Thing/DigitalArtifact, Entity/Person, Place, Concept/Event, Concept/Idea. One signal per unique artifact/entity, deduplicated by `file_id` (artifacts) or email (persons). Signals are written to the `signal` payload field during `bower.scan.deep` and `bower.scan.light`.
 
 For full JSON schema examples, see `references/signal_examples.md`.
 
@@ -95,6 +103,16 @@ For full JSON schema examples, see `references/signal_examples.md`.
 | `bower.init` | First-use initialization. |
 
 Full flag descriptions and semantics: `references/command_reference.md`
+
+## Workflow
+
+The Bower organization pipeline: **scan → analyze → propose → apply → learn**.
+
+1. Scan Drive structure and file contents
+2. Analyze with domain-specific logic (taxes by year, projects by name, etc.)
+3. Propose non-destructive moves/renames
+4. Apply approved changes
+5. Learn from accepted patterns for auto-approval
 
 ## Execution flow
 
@@ -171,7 +189,7 @@ Emitted weekly after Sunday deep scan as an InsightProposal with `proposal_type:
 ## Optional skill cooperation
 
 - **Vesper** — Bower emits a weekly Drive health InsightProposal after each Sunday deep scan. If Vesper is absent, the signal is dropped silently.
-- **Elephas** — Bower emits structured signals for all Drive artifacts and entities encountered during scans. If Elephas is absent, signal files accumulate in the journal payload until Elephas processes them.
+- **Chronicle** — Bower emits structured signals in journal payloads for all Drive artifacts and entities encountered during scans.
 - **Mentor** — Bower's journals are evaluated by Mentor for OKR scoring. No action required from Bower.
 
 ## Inter-skill interfaces
@@ -223,6 +241,7 @@ public
 
 - **Stale data after major Drive changes** — Between scans, the Drive may be cleaned up, migrated, or restructured catastrophically (e.g., 381K files → 17). When a deep scan detects a >50% change in total file/folder count compared to `scan_progress.json` or `drive_digest.json`, treat the previous scan data as stale: reset `scan_progress.json` to `phase: complete` with the new counts, update `drive_digest.json` with new totals, and add a `scan_notes` field documenting the change. Do NOT carry forward old proposals — the old `proposals.jsonl` records reference file/folders that may no longer exist. Let the new scan drive fresh proposals. Optionally archive old scan data (`scans/`, `proposals.jsonl`) to a dated archive directory.
 - **Cron jobs cannot use `execute_code`** — Scheduled cron runs (light and deep scans on this profile) execute in an isolated context where `execute_code` is blocked. All scan logic must use native Hermes tools (List Google Drive files, Search Google Drive, `write_file`, `terminal` with `>>` for `.jsonl` append). Do not write Python scripts that expect to be run via `execute_code` for scheduled work. The `scripts/` directory is for interactive/scripted runs only.
+- **Small Drive efficiency** — On Drives with <500 total files, the modifiedTime query may return mostly batch-imported content (e.g., 97 books imported at once). Group by timestamp to identify batch imports vs. real user activity. See `references/scan-debug.md` → "Small Drive light scan efficiency" for the triage pattern.
 - **Drift threshold aborts light scans** — If the light scan detects significant structural drift, it aborts entirely rather than producing partial results. A subsequent deep scan is needed to re-establish the baseline.
 - **Staleness checks execute per-proposal** — Even auto-approved, high-confidence proposals pass through a staleness check immediately before execution. A file moved between scan and apply can cause a proposal to quietly skip.
 - **Permission fetch suppresses all move proposals** — If folder permissions are unavailable (API error or scope missing), Bower suppresses *all* move proposals for that folder—not just the affected files—and falls back to description-only suggestions.
@@ -230,6 +249,8 @@ public
 - **Medical file redaction** — Medical folder contents are never logged, journaled, or surfaced by filename. Only folder paths and file counts appear in apply digests and simulation output.
 - **Quiet mode suppresses only the digest** — Enabling quiet mode hides the apply digest output but does not bypass approval requirements, staleness checks, or any safety gate.
 - **Small Drive below domain thresholds** — When the Drive has fewer than 5 files or 2 subfolders total, no domain logic activates. Analysis falls entirely on generic outlier rules (depth outliers, name inconsistencies). This is expected — report the Drive as "too small for domain detection" and focus proposals on obvious misplacements (files at root that belong in named folders, duplicate filenames).
+
+- **Shared files appear in modifiedTime queries** — The Drive API `modifiedTime` filter returns shared files/folders that were recently modified by their owners, even though they're outside the user's Drive tree. These appear with `parents: null` and `ownedByMe: False`. Always check `ownedByMe` and parent location before generating proposals. Shared files are never actionable by Bower. See `references/scan-debug.md` → "Shared files in modifiedTime results" for the full triage pattern.
 
 - **Light scan misses bulk-moved files** — The `bower.scan.light` queries by `modifiedTime`, which only catches files *modified* since the last scan. Files that were bulk-moved or bulk-created without recent modification timestamps are invisible to this query. The mandatory structural baseline check (root-level count comparison) before the `modifiedTime` query catches this. Without it, a completely restructured Drive can be reported as "no new files." See the "Light scan structural baseline check" section above.
 
@@ -239,6 +260,8 @@ public
 
 - **Large Drive founding scans timeout** — On Drives with 10K+ items, a full founding deep scan (`bower.scan.deep --founding`) can exceed the 10-minute cron timeout during folder/file enumeration. The Drive API may also return 500 Internal Errors under heavy pagination load. Solution: use a **sampled deep scan** strategy (see `references/large-drive-scanning.md`): enumerate root-level items fully, then sample up to 300 files per root folder (3 pages × 100). Set `scan_coverage: 0.5` in `drive_digest.json` and add `scan_notes` documenting the approach. The weekly deep scan will fill in full enumeration. Always wrap Drive API list calls with exponential backoff for 500/503 errors.
 
+- **Stale digest causes permanent drift abort loop** — `drive_digest.json` can get a wrong baseline if a light scan incorrectly concludes that a large-drift event "reverted to baseline." Subsequent scans compare against the wrong baseline and permanently detect 95%+ drift, aborting every run and generating no proposals. Diagnosis: `root_level_file_count` and `root_level_folder_count` in `drive_digest.json` don't match what the Drive API actually returns. Fix: query the Drive API directly (`mimeType = 'application/vnd.google-apps.folder' and parentId = 'root'` for folders; `parentId = 'root' and mimeType != 'application/vnd.google-apps.folder'` for files), then update `drive_digest.json` with the real counts, clear `scan_progress.json`'s `drift_detected: true` flag, and update `folder_index.json` with the actual folder IDs. **Never write a digest update concluding drift has "reverted" unless you verified the root-level counts match the previous baseline.** Confirmed June 2026.
+
 ## Support File Map
 
 | File | When to read |
@@ -246,7 +269,7 @@ public
 | `references/organization_rules.md` | Before every `bower.analyze` run; defines preference inference, pattern promotion, taxonomy inference, all proposal generation rules, permission lookup, feedback suppression, recalibration, scan resume, cap behavior, digest format, and review narrative |
 | `references/domains.md` | Before every `bower.analyze` run; defines domain detection, prescriptive/descriptive mode, canonical structures, and per-domain filing rules for Taxes, Projects, Home, Finance, Legal, Medical, Archive, Education |
 | `references/analysis_schema.md` | Before `bower.scan.deep` or `bower.analyze`; defines all data schemas including preference profile, folder_index, scan_progress, proposals, move log, undo log, feedback log, and config |
-| `references/signal_examples.md` | Before emitting signals to Elephas; JSON schema examples for all five signal types |
+| `references/signal_examples.md` | Before emitting signals; JSON schema examples for all five signal types |
 | `references/scan-debug.md` | When debugging scan issues, resume failures, or light scan anomalies |
 | `references/command_reference.md` | When you need full command flag descriptions and semantics |
 | `references/decision-invariants.md` | Before every `bower.analyze` or `bower.apply` run; safety invariants that govern all operations |

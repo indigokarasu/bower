@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Usage: bower_analyze.py [--help] [--scan-data PATH]
+# argparse-based CLI for Bower analysis
 """
 Bower Analysis Script
 Implements bower.analyze: loads scan data, builds preference profile,
