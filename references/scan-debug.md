@@ -155,3 +155,55 @@ The `proposals.jsonl` uses `proposal_type` and `confidence_tier` (NOT `type` and
 
 ### Critical: No bower_analyze.py script may exist
 If no `bower_analyze.py` exists, create it based on `references/organization_rules.md`, `references/domains.md`, and `references/analysis_schema.md`.
+
+### Small Drive light scan efficiency (under 500 total files)
+
+**Observed pattern (2026-06-26):** On owner's Drive (~147 total files), the modifiedTime query returned 100 results — but 97 were epub/pdf books batch-imported to Bookshelf at the same timestamp. Only 3 were actual user activity (new folder, new PDF, modified spreadsheet). The "Drive is overwhelmingly automated" section above describes a 10K+ file scenario; small Drives have the opposite problem — most modified files are *intentional batch imports*, not noise.
+
+**Efficient triage for small Drives:**
+
+1. **Group by modified timestamp.** If 90%+ of modified files share a timestamp within minutes of each other, it's a batch import. Skip content reading — just verify the destination folder makes sense.
+
+2. **Identify user-authored files quickly.** After filtering batch imports, look at:
+   - Files modified at *unique* timestamps (especially the most recent)
+   - Newly created folders (check parents to determine if they follow existing domain patterns)
+   - Modified files that are NOT in the usual import folder
+
+3. **Check parent folders explicitly.** The Drive API search results don't include parent IDs in the `files.list` response from `search_drive_files`. Use `mcp_google_workspace_list_drive_items` with the parent folder ID to see where new content landed, or infer from the folder structure you already know.
+
+4. **Domain pattern recognition on small Drives.** owner's structure is: `Home/Taxes/YYYY/[Deductions, CA TAX, Tax temp]`. When a new "Deductions" subfolder appears under "2026", it's following the established prescriptive tax pattern — mark it as correct, not as an outlier. The domain detection threshold (5+ files / 2+ subfolders) may need to be lower for small Drives where the user has already established multi-year tax subfolders.
+
+5. **Skip deep inspection for well-understood domains.** Books in Bookshelf = always correct. Tax docs in Home/Taxes/YYYY/ = always correct. Don't generate proposals for files that are clearly in their canonical location.
+
+6. **Report succinctly.** For a small, well-organized Drive, a single paragraph summary is sufficient. No need for the full tier/type breakdown tables from `analysis_events.jsonl` when there are zero outliers.
+
+**Cron optimization:** For small Drives (<500 files), you can often process the entire modifiedTime query result set in one page (100 items). If `nextPageToken` is present AND the Drive is known to be small, paginate once more — the second page will likely be empty or contain only a few items. Don't set up multi-page pagination infrastructure for a Drive that barely fills one page.
+
+### Shared files in modifiedTime results — triage before action
+
+**Observed pattern (2026-06-28):** The `modifiedTime` query in `bower.scan.light` returns files and folders that are **shared with the user** but not in their Drive tree. These appear with `parents: null` and `ownedByMe: False` on `.get()`. They may be:
+- Files/folders from another user's Drive (shared directly)
+- Folders inside "Shared with me" items (e.g., `My Mac/Documents/...`)
+- Shared spreadsheets recently modified by their owner
+
+**Why they appear:** The Drive API `files.list` with `modifiedTime` filter returns all files the user can see that were modified in the timeframe — including shared files. These are NOT part of the user's Drive structure.
+
+**Triage rule:** For each file/folder returned by the modifiedTime query, check:
+1. `parents: None` + `ownedByMe: False` → **shared file, skip.** Bower has no authority to organize files outside the user's Drive tree.
+2. Parent folder not in user's Drive tree (not in `folder_index.json`, not visible in root listing) → **shared context, skip.**
+3. File inside a folder like "My Mac" that doesn't appear in the user's root listing → **shared context, skip.**
+
+**How to verify:** Query `service.files().get(fileId=..., fields='parents, ownedByMe, shared')`. If `ownedByMe` is `False` and `parents` is `None`/empty, the file is shared and outside scope. For folders, check if they appear in the root-level listing (`'root' in parents`) — if not, they're in a shared context.
+
+**Reporting:** Count shared files in the scan results and report them as "not actionable — shared context" in the evidence log. Do NOT generate proposals for shared files. The structural baseline check (root count comparison) already filters these out since shared folders don't appear in `'root' in parents` queries.
+
+**Example from June 28 scan:** 31 modified files returned. 28 were automated scripts in `My Mac/Documents/takeout-enrichment-2026-06-28/` (shared context folder), 2 were shared spreadsheets (Clayroom Sign-Up Sheet, SF Restaurants). All 31 correctly classified as non-actionable. Zero proposals generated.
+
+### Identifying batch vs. user activity by timestamp clustering
+
+**Rule:** If the modifiedTime values cluster tightly (within 5 minutes) and the files share a common parent folder and mime type pattern, classify as batch import. Real user activity typically has:
+- Scattered modifiedTime values (hours/days apart)
+- Different mime types or parent folders
+- Or a single file/folder modified at a unique time
+
+**Caveat:** The modifiedTime on imported books is the import time, not the original file creation date. All books imported in one session will share a modifiedTime cluster. This is expected and not a sign of automated system activity.
