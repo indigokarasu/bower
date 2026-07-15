@@ -11,10 +11,15 @@ import time
 from pathlib import Path
 from datetime import datetime, timezone
 
+_HELP_ARGS = {"--help", "-h"}
+if set(sys.argv[1:]) & _HELP_ARGS:
+    print((__doc__ or "").strip() or "Usage: python3 bower_read_contents.py [no flags]")
+    sys.exit(0)
+
 # Auth
 import sys as _sys
 _sys.path.insert(0, str(Path.home() / '.hermes' / 'scripts'))
-from Google auth import get_drive_service
+from google_auth import get_drive_service
 
 def get_drive():
     return get_drive_service()

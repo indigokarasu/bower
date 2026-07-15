@@ -14,6 +14,13 @@ includes:
 metadata:
   author: Indigo Karasu (indigokarasu)
   version: 1.4.6
+  hermes:
+    category: utilities
+    tags:
+    - google-drive
+    - file-organization
+    - auto-organize
+    - ocas-core
 triggers:
 - google drive
 - drive organizer
@@ -148,14 +155,14 @@ Read these reference files before the operations they govern:
 
 See `references/decision-invariants.md` for the full list of safety invariants.
 
-### Light scan structural baseline check (MANDATORY)
+**Light scan structural baseline check (MANDATORY):**
 
 Before running the `modifiedTime` query in `bower.scan.light`, ALWAYS perform a structural baseline comparison:
 
-1. Query root-level items: `GOOGLEDRIVE_FIND_FILE` with `q="'root' in parents and trashed = false"`, `pageSize=10`
-2. Compare counts against `drive_digest.json` → `root_level_file_count` and `root_level_folder_count`
-3. If root-level counts differ by more than 15% from the stored baseline, **flag structural drift immediately** — before processing the `modifiedTime` query results
-4. If drift exceeds threshold, abort the light scan, write `drift_detected` to `scan_events.jsonl`, and request a deep scan
+- [ ] Query root-level items: `GOOGLEDRIVE_FIND_FILE` with `q="'root' in parents and trashed = false"`, `pageSize=10`
+- [ ] Compare counts against `drive_digest.json` → `root_level_file_count` and `root_level_folder_count`
+- [ ] If root-level counts differ by more than 15% from the stored baseline, **flag structural drift immediately** — before processing the `modifiedTime` query results
+- [ ] If drift exceeds threshold, abort the light scan, write `drift_detected` to `scan_events.jsonl`, and request a deep scan
 
 **Why this matters (2026-06-14 incident):** A Drive restructuring placed 89+ files and 12+ folders at root level. All files had `modifiedTime` dates before the last scan's cutoff, so the `modifiedTime` query returned 0 results. The drift was invisible to the light scan. Only a root-level count comparison caught it. Without this check, the light scan would have reported "no new files" while the Drive was completely restructured.
 

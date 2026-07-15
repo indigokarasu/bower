@@ -7,6 +7,11 @@ import subprocess
 import sys
 import os
 
+_HELP_ARGS = {"--help", "-h"}
+if set(sys.argv[1:]) & _HELP_ARGS:
+    print((__doc__ or "").strip() or "Usage: python3 bower_mempalace_ingest.py [no flags]")
+    sys.exit(0)
+
 def main():
     # Run the Bower to MemPalace ingestion
     ingest_script = "<hermes-root>/commons/data/ocas-bower/bower_full_scan.py"

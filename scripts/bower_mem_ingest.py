@@ -8,8 +8,14 @@ Only files facts that tell you something real — never file counts or org patte
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from datetime import datetime, timezone
+
+_HELP_ARGS = {"--help", "-h"}
+if set(sys.argv[1:]) & _HELP_ARGS:
+    print((__doc__ or "").strip() or "Usage: python3 bower_mem_ingest.py [no flags]")
+    sys.exit(0)
 
 BOWER_DATA = Path(os.path.expanduser("~/.hermes/commons/data/ocas-bower"))
 OUTPUT_FILE = BOWER_DATA / "mem_ingest_output.json"

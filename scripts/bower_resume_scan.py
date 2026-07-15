@@ -11,6 +11,11 @@ from pathlib import Path
 from datetime import datetime, timezone
 from googleapiclient.errors import HttpError
 
+_HELP_ARGS = {"--help", "-h"}
+if set(sys.argv[1:]) & _HELP_ARGS:
+    print((__doc__ or "").strip() or "Usage: python3 bower_resume_scan.py [no flags]")
+    sys.exit(0)
+
 # Paths
 HERMES_HOME = Path.home() / ".hermes"
 BOWER_DATA = HERMES_HOME / "commons/data/ocas-bower"
@@ -21,7 +26,7 @@ SCAN_PROGRESS = BOWER_DATA / "scan_progress.json"
 
 # Central auth
 sys.path.insert(0, str(HERMES_HOME / 'scripts'))
-from Google auth import get_drive_service
+from google_auth import get_drive_service
 
 def get_drive():
     return get_drive_service()
