@@ -19,6 +19,11 @@ import hashlib
 from pathlib import Path
 from datetime import datetime, timezone
 
+_HELP_ARGS = {"--help", "-h"}
+if set(sys.argv[1:]) & _HELP_ARGS:
+    print((__doc__ or "").strip() or "Usage: python3 bower_full_scan.py [no flags]")
+    sys.exit(0)
+
 # Google OAuth credentials — use the central google_auth helper or direct API access
 CREDS_DIR = Path.home() / '.hermes' / 'credentials'
 TOKEN_PATH = CREDS_DIR / 'google-workspace-user.json'
