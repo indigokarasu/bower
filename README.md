@@ -1,24 +1,15 @@
-# 🦜 Bower
+# bower
 
-> **Automatic Google Drive organizer — scans, categorizes, and reorganizes your files.**
+<p align="center">
+<img src="./assets/readme/hero.svg" width="100%" alt="Bower: automatic Google Drive organizer — scans, categorizes, and reorganizes Drive files using personalized preferences.">
+</p>
 
-## Why Bower?
+**bower** Bower: automatic Google Drive organizer — scans, categorizes, and reorganizes Drive files using personalized preferences.
 
-Google Drive accumulates files fast. Bower scans your Drive's structure and content, builds a personalized preference profile, and executes non-destructive moves, renames, and description writes. It learns how you organize and helps you stay organized.
 
-Skill packages follow the [agentskills.io](https://agentskills.io/specification) open standard and are compatible with OpenClaw, Hermes Agent, Claude, and any agentskills.io-compliant client.
+> Tell it what you need. It does the work.
 
-## Quick Start
-
-```
-# Organize Drive
-"Scan my Drive and suggest organization changes"
-
-# Apply changes
-"Go ahead and reorganize"
-```
-
-## What It Does
+## What it does
 
 Bower scans Google Drive structure and content, builds a personalized preference profile based on your existing organization patterns, applies domain-specific logic for categorization, and executes non-destructive moves (no deletions — only renames, moves, and description updates).
 
@@ -30,3 +21,7 @@ Bower scans Google Drive structure and content, builds a personalized preference
 ---
 
 *Bower is part of the [OCAS Agent Suite](https://github.com/indigokarasu).*
+
+---
+
+*bower is part of the [OCAS Agent Suite](https://github.com/indigokarasu).*
