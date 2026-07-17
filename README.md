@@ -4,10 +4,10 @@
 <img src="./assets/readme/hero.svg" width="100%" alt="Bower: automatic Google Drive organizer — scans, categorizes, and reorganizes Drive files using personalized preferences.">
 </p>
 
-**bower** Bower: automatic Google Drive organizer — scans, categorizes, and reorganizes Drive files using personalized preferences.
+bower — Bower: automatic Google Drive organizer — scans, categorizes, and reorganizes Drive files using personalized preferences.
 
 
-> Tell it what you need. It does the work.
+> One clear job, done well.
 
 ## What it does
 
@@ -25,3 +25,5 @@ Bower scans Google Drive structure and content, builds a personalized preference
 ---
 
 *bower is part of the [OCAS Agent Suite](https://github.com/indigokarasu).*
+
+---
