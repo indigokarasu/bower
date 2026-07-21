@@ -1,6 +1,6 @@
 # Bower Signal Emission Examples
 
-Bower emits structured signals to Elephas for all entities and artifacts encountered during scans. Drive content is inherently user-owned — the user put it there, organized it, and chose to keep it — so all signals are emitted with `user_relevance: "user"`.
+Bower emits structured signals to See references/integration-notes.md for current backend architecture. for all entities and artifacts encountered during scans. Drive content is inherently user-owned — the user put it there, organized it, and chose to keep it — so all signals are emitted with `user_relevance: "user"`.
 
 Signal files are written to the `signal` payload field in the journal entry. Bower writes signals during `bower.scan.deep` and `bower.scan.light` as entities are encountered. Duplicate signals for the same Drive artifact are deduplicated by `file_id`; Bower updates the existing signal rather than creating a new one when metadata changes (e.g., last modified date, sharing status).
 

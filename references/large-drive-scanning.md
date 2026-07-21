@@ -33,7 +33,9 @@ For Drives with >10K estimated items, use a **sampled deep scan** instead of ful
 | Domain detection | Complete | Root-level only |
 | Proposal depth | All files | Root-level + sampled |
 | Scan coverage field | 1.0 | 0.5 |
-| Follow-up | None needed | Weekly deep scan fills gaps |
+| Follow-up | None needed | Weekly deep scan STAYS sampled (never full enumeration) |
+
+> **Correction (2026-07-19):** the original note said "Weekly deep scan fills gaps" (implying later full enumeration). On a Drive with ~24K total folders (a giant nested backup/Takeout tree), full enumeration times out the cron job and risks 500s. The weekly `bower:weekly-deep` run ALSO uses the sampled strategy — `scan_coverage` stays `0.5` every week by design. The "fills gaps" language has been removed from `deep_scan_sampled.py`'s docstring accordingly.
 
 ### Implementation Notes
 - Set `scan_coverage: 0.5` in `drive_digest.json`
@@ -60,6 +62,17 @@ for attempt in range(3):
 - Founding run on Drive with >10K items (check via `about.get` storage or quick root count)
 - Any deep scan that exceeds 5 minutes on folder enumeration
 - Cron jobs with strict time limits
+- **Weekly `bower:weekly-deep` on this Drive — always sampled** (the Drive has ~24K folders; full enum is not viable)
+
+## Current implementation on this Drive (2026-07-14 → )
+The maintained, runnable entrypoint is **`commons/data/ocas-bower/deep_scan_sampled.py`** (NOT the skill's own `scripts/bower_full_scan.py`, which does full enumeration + uses the broken hardcoded-credential auth path). What it does:
+1. `get_service("drive", ...)` auth (correct per-account client + auto-refresh — never hand-built `Credentials`).
+2. Phase 1: enumerate ALL folders once, cache to `folder_full_cache.json` (reused on subsequent runs → fast). Gives the true folder count + topology.
+3. Root-level structural baseline: confirm 6 curated roots, 0 loose root files.
+4. Phase 2: sample up to **300 direct children** per curated root (`ROOT_IDS`: Bookshelf, Archive, Home, Projects, Professional, Authenticator Backups). Writes `scans/{id}.json` (analyze-compatible) + `folder_index.json`.
+5. Stale-data reconciliation, `drive_digest.json` update (`scan_coverage: 0.5`), `scan_progress.json`, scan event, evidence, Observation Journal, Vesper health signal.
+- The curated roots hold ~516 direct files; the other ~23.7K folders are the auto-generated backup/Takeout tree and are out of scope (Bower organizes, never deletes).
+- After the sampled deep scan, run the analyzer (`scripts/bower_analyze.py`, which reads the canonical `commons/data/ocas-bower` dir) to refresh `preference_profile.json` and proposals. The analyzer is pure-local (no Drive auth needed).
 
 ## Future Enhancement
-Consider adding a `--sample` flag to `bower.scan.deep` that automatically switches to sampled mode based on item count estimates.
+A `--sample` flag on `bower.scan.deep` would formalize the auto-switch, but until then the sampled script IS the weekly-deep implementation.
