@@ -7,7 +7,7 @@
 bower — Bower: automatic Google Drive organizer — scans, categorizes, and reorganizes Drive files using personalized preferences.
 
 
-> One clear job, done well.
+> Operational skill for the OCAS family.
 
 ## What it does
 
