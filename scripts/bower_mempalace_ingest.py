@@ -14,7 +14,7 @@ if set(sys.argv[1:]) & _HELP_ARGS:
 
 def main():
     # Run the Bower to MemPalace ingestion
-    ingest_script = "<hermes-root>/commons/data/ocas-bower/bower_full_scan.py"
+    ingest_script = os.path.expanduser("~/.hermes/commons/data/ocas-bower/bower_full_scan.py")
     
     if not os.path.exists(ingest_script):
         print(f"ERROR: Ingest script not found: {ingest_script}")
@@ -23,7 +23,7 @@ def main():
     result = subprocess.run(
         ["python3", ingest_script],
         capture_output=True, text=True,
-        cwd="<hermes-root>/commons/data/ocas-bower"
+        cwd=os.path.expanduser("~/.hermes/commons/data/ocas-bower")
     )
     
     if result.returncode == 0:

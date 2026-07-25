@@ -20,10 +20,10 @@ Bower scans Google Drive structure and content, builds a personalized preference
 
 ---
 
-*Bower is part of the [OCAS Agent Suite](https://github.com/indigokarasu).*
+*Bower is part of the [OCAS Agent Suite](https://github.com/<agent-handle>).*
 
 ---
 
-*bower is part of the [OCAS Agent Suite](https://github.com/indigokarasu).*
+*bower is part of the [OCAS Agent Suite](https://github.com/<agent-handle>).*
 
 ---

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Bower → MemPalace ingestion script.
-Extracts MEANINGFUL facts about owner's life from Bower scan data.
+Extracts MEANINGFUL facts about the operator's life from Bower scan data.
 Only files facts that tell you something real — never file counts or org patterns.
 """
 
@@ -90,21 +90,21 @@ def main():
     for health in facts["health"]:
         signal = health["signal"]
         if signal == "ucsf":
-            output["kg_facts"].append({"subject": "owner", "predicate": "medical_provider", "object": "UCSF"})
+            output["kg_facts"].append({"subject": "the operator", "predicate": "medical_provider", "object": "UCSF"})
         elif signal == "fibroscan":
-            output["kg_facts"].append({"subject": "owner", "predicate": "requested_medical_procedure", "object": "FibroScan"})
+            output["kg_facts"].append({"subject": "the operator", "predicate": "requested_medical_procedure", "object": "FibroScan"})
     
     for finance in facts["finance"]:
         signal = finance["signal"]
         if "mortgage" in signal:
-            output["kg_facts"].append({"subject": "owner", "predicate": "has_financial_account", "object": "mortgage"})
+            output["kg_facts"].append({"subject": "the operator", "predicate": "has_financial_account", "object": "mortgage"})
         elif "401k" in signal or "ira" in signal or "roth" in signal:
-            output["kg_facts"].append({"subject": "owner", "predicate": "has_retirement_account", "object": signal})
+            output["kg_facts"].append({"subject": "the operator", "predicate": "has_retirement_account", "object": signal})
     
     for home in facts["home"]:
         signal = home["signal"]
         if "honu hale" in signal:
-            output["kg_facts"].append({"subject": "owner", "predicate": "home_renovation_project", "object": "Honu Hale"})
+            output["kg_facts"].append({"subject": "the operator", "predicate": "home_renovation_project", "object": "Honu Hale"})
     
     # Build drawer content — ONLY meaningful facts, NO counts
     lines = [f"## Life Facts Discovered — {output['generated_at'][:10]}"]

@@ -16,9 +16,9 @@ them returns: `Tool '<name>' does not exist. Available tools: browser_back, ...`
   exposes `get_service(api_name, api_version, scopes, account=...)`.
 - **ALWAYS build the service through `get_service` — do NOT hand-build
   `Credentials` from a cached token file + a separately hardcoded `client_id`.**
-  The cached token files (`<hermes-home>/google_token.json`,
-  `/root/indigo-repo/credentials/google_token.json`) carry a `client_id` that
-  does NOT match the owner OAuth client (`628032148246-…`). If a script loads
+  The cached token files (`~/.hermes/profiles/indigo/google_token.json`,
+  `<fs-root>/indigo-repo/credentials/google_token.json`) carry a `client_id` that
+  does NOT match the <operator> OAuth client (`628032148246-…`). If a script loads
   one of those token files yet constructs
   `Credentials(client_id="628032148246-…", …)`, the token (issued for one
   client) is presented with another client's secrets → `invalid_grant: Bad
@@ -32,16 +32,16 @@ them returns: `Tool '<name>' does not exist. Available tools: browser_back, ...`
   ```python
   import sys
   from pathlib import Path
-  sys.path.insert(0, str(Path("<hermes-home>/scripts")))
+  sys.path.insert(0, str(Path("~/.hermes/profiles/indigo/scripts")))
   from google_auth import get_service
   svc = get_service("drive", "v3",
                     ["https://www.googleapis.com/auth/drive"],
-                    account="google-workspace-user")
+                    account="<user-google-email>")
   # raises on dead refresh token (HTTP 400 invalid_grant)
   svc.about().get(fields="user").execute()  # smoke test
   ```
 - Run the scan script via `terminal` (cron blocks `execute_code`):
-  `python3 <hermes-home>/commons/data/ocas-bower/run_light_scan.py`
+  `python3 ~/.hermes/profiles/indigo/commons/data/ocas-bower/run_light_scan.py`
   (NOTE: the script once referenced here, `scripts/bower_drive_sdk_light_scan.py`,
   does NOT exist — do not call it. `run_light_scan.py` uses `get_service`, reads
   the cutoff dynamically from `drive_digest.json` `last_updated`, and honors
@@ -64,8 +64,8 @@ recovers it. Handle at the scan entry point:
 2. Write `degraded: google_drive` to `evidence.jsonl` (`not_activity_reason` mandatory).
 3. Write an aborted `light_scan` event to `scan_events.jsonl`.
 4. Report degraded; do NOT generate proposals; never delete.
-5. Tell owner to re-authenticate via OAuth consent
-   (`access_type=offline&prompt=consent`) for `google-workspace-user`.
+5. Tell <operator> to re-authenticate via OAuth consent
+   (`access_type=offline&prompt=consent`) for `<user-google-email>`.
 
 First observed 2026-06-29; recurred 2026-07-14 (16 days of silent light-scan
 failures). `scripts/bower_drive_sdk_light_scan.py` implements this contract.

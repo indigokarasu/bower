@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import os
+OPERATOR_EMAIL = os.environ.get("OCAS_OPERATOR_EMAIL", "operator@example.com")
 """Bower light-scan triage — read-only.
 
 Resolves parent folder IDs in light_scan_latest.json to names, groups the
@@ -15,7 +17,7 @@ Options:
     --data DIR        ocas-bower data dir (default:
                      <hermes-home>/commons/data/ocas-bower).
     --account EMAIL  Google account to authenticate as
-                     (default: google-workspace-user).
+                     (default: OPERATOR_EMAIL).
     --json            Emit structured JSON on stdout instead of the
                      human-readable report.
 
@@ -30,9 +32,9 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-DEFAULT_DATA = "<hermes-home>/commons/data/ocas-bower"
-DEFAULT_OWNER = "google-workspace-user"
-SCRIPTS = "<hermes-home>/scripts"
+DEFAULT_DATA = os.path.expanduser("~/.hermes/profiles/indigo/commons/data/ocas-bower")
+DEFAULT_OWNER = "OPERATOR_EMAIL"
+SCRIPTS = os.path.expanduser("~/.hermes/profiles/indigo/scripts")
 
 # Timestamp-named export/checkpoint folders are exactly YYYY-MM-DD_HH-MM-SS.
 # (Avoid naive [:4].isdigit() — it false-positives on names like
