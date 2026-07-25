@@ -87,7 +87,7 @@ from google.auth.transport.requests import Request
 import json, urllib.request
 
 # Load token file
-d = json.loads(Path("/root/.google_workspace_mcp/credentials/google-workspace-user.json").read_text())
+d = json.loads(Path("<gworkspace-creds>/credentials/<user-google-email>.json").read_text())
 print(f"Token expiry: {d.get('expiry')}")  # If past, token is expired
 
 # Test with direct REST API (bypasses library auto-refresh)
@@ -158,7 +158,7 @@ If no `bower_analyze.py` exists, create it based on `references/organization_rul
 
 ### Small Drive light scan efficiency (under 500 total files)
 
-**Observed pattern (2026-06-26):** On owner's Drive (~147 total files), the modifiedTime query returned 100 results — but 97 were epub/pdf books batch-imported to Bookshelf at the same timestamp. Only 3 were actual user activity (new folder, new PDF, modified spreadsheet). The "Drive is overwhelmingly automated" section above describes a 10K+ file scenario; small Drives have the opposite problem — most modified files are *intentional batch imports*, not noise.
+**Observed pattern (2026-06-26):** On <operator>'s Drive (~147 total files), the modifiedTime query returned 100 results — but 97 were epub/pdf books batch-imported to Bookshelf at the same timestamp. Only 3 were actual user activity (new folder, new PDF, modified spreadsheet). The "Drive is overwhelmingly automated" section above describes a 10K+ file scenario; small Drives have the opposite problem — most modified files are *intentional batch imports*, not noise.
 
 **Efficient triage for small Drives:**
 
@@ -171,7 +171,7 @@ If no `bower_analyze.py` exists, create it based on `references/organization_rul
 
 3. **Check parent folders explicitly.** The Drive API search results don't include parent IDs in the `files.list` response from `search_drive_files`. Use `mcp_google_workspace_list_drive_items` with the parent folder ID to see where new content landed, or infer from the folder structure you already know.
 
-4. **Domain pattern recognition on small Drives.** owner's structure is: `Home/Taxes/YYYY/[Deductions, CA TAX, Tax temp]`. When a new "Deductions" subfolder appears under "2026", it's following the established prescriptive tax pattern — mark it as correct, not as an outlier. The domain detection threshold (5+ files / 2+ subfolders) may need to be lower for small Drives where the user has already established multi-year tax subfolders.
+4. **Domain pattern recognition on small Drives.** <operator>'s structure is: `Home/Taxes/YYYY/[Deductions, CA TAX, Tax temp]`. When a new "Deductions" subfolder appears under "2026", it's following the established prescriptive tax pattern — mark it as correct, not as an outlier. The domain detection threshold (5+ files / 2+ subfolders) may need to be lower for small Drives where the user has already established multi-year tax subfolders.
 
 5. **Skip deep inspection for well-understood domains.** Books in Bookshelf = always correct. Tax docs in Home/Taxes/YYYY/ = always correct. Don't generate proposals for files that are clearly in their canonical location.
 

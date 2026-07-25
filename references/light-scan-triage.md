@@ -13,11 +13,11 @@ only writer.
 Use the only known-good path (see `references/cron-drive-fallback.md`):
 ```python
 import sys
-sys.path.insert(0, "<hermes-home>/scripts")
+sys.path.insert(0, "~/.hermes/profiles/indigo/scripts")
 from google_auth import get_service
 svc = get_service("drive", "v3",
                   ["https://www.googleapis.com/auth/drive"],
-                  account="google-workspace-user")
+                  account="<user-google-email>")
 ```
 
 ## Triage recipe

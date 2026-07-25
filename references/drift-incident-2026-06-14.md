@@ -39,6 +39,6 @@ Key folders now at root (previously nested or nonexistent):
 
 Files needing organization:
 - 10 untitled files (7 docs, 3 sheets)
-- 3× duplicate "Indigo Container Test" spreadsheets
+- 3× duplicate "the agent Container Test" spreadsheets
 - 11 medical/health files at root with no medical folder
 - 18 agent/dev files mixed with personal documents

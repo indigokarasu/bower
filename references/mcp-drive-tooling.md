@@ -12,13 +12,13 @@ The Bower SKILL.md was written against a generic Drive API and references tool n
 
 ## Owner account
 
-The Drive owner email is required on every call. For owner's Drive it is `google-workspace-user`.
+The Drive owner email is required on every call. For <operator>'s Drive it is `<user-google-email>`.
 
 ## Detecting shared vs owned files in arrival results
 
 The MCP search results do NOT expose a literal `ownedByMe` boolean or `parents` array. Infer ownership from the result fields:
 
-- **Owned by user**: result shows `"Last Edited By: <Owner Name> <<owner email>>>"` (e.g., `Last Edited By: the operator <google-workspace-user>`).
+- **Owned by user**: result shows `"Last Edited By: <Owner Name> <<owner email>>>"` (e.g., `Last Edited By: <user> <<user-google-email>>`).
 - **Externally shared / not actionable**: result shows a different editor (`Last Edited By: mike.hill <mike.hill@<employer>.com>`) OR a sharing badge with no owner edit such as `"Anyone with link: writer"`. These correspond to the `parents: null` / `ownedByMe: False` items the skill's gotcha warns about — exclude them from proposals.
 
 Group arrivals by `Last Edited By` to split the two classes quickly: count non-owner editors and exclude those files.
