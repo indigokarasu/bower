@@ -15,7 +15,7 @@ Usage:
 Options:
     -h, --help        Show this help message and exit.
     --data DIR        ocas-bower data dir (default:
-                     <hermes-home>/commons/data/ocas-bower).
+                     $HERMES_HOME/commons/data/ocas-bower).
     --account EMAIL  Google account to authenticate as
                      (default: OPERATOR_EMAIL).
     --json            Emit structured JSON on stdout instead of the
@@ -74,7 +74,10 @@ def main(argv=None):
     # can print usage on hosts where those packages are missing.
     sys.path.insert(0, SCRIPTS)
     try:
-        from google_auth import get_service
+        try:
+            from google_auth_mcp import get_service
+        except ImportError:
+            from google_auth import get_service
     except ImportError as e:
         sys.stderr.write(
             f"ERROR: could not import google_auth.get_service ({e}).\n"
@@ -169,7 +172,7 @@ def main(argv=None):
 
     print(f"\n=== SHARED (non-actionable) ===")
     for s in shared:
-        print(f"   - {s['name']}  owner={s['owners']}")
+        print(f"   - {s['name']}  owner={s.get('owners', 'unknown')}")
 
     n_folders = sum(1 for i in owned if i["mimeType"] == "application/vnd.google-apps.folder")
     print(f"\nSUMMARY: {len(owned)} owned ({n_folders} folders), {len(shared)} shared.")
