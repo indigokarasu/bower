@@ -15,6 +15,11 @@ from datetime import datetime, timedelta
 from collections import defaultdict, Counter
 import hashlib
 
+import sys as _sys
+if set(_sys.argv[1:]) & {"--help", "-h"}:
+    print((__doc__ or "Usage: bower_analyze.py [--scan-data PATH]").strip())
+    _sys.exit(0)
+
 # Configuration
 AGENT_ROOT = Path(os.environ.get("HERMES_HOME") or os.environ.get("OCAS_AGENT_ROOT") or Path.home() / ".hermes")
 BOWER_DATA = AGENT_ROOT / "commons/data/ocas-bower"

@@ -12,11 +12,11 @@ them returns: `Tool '<name>' does not exist. Available tools: browser_back, ...`
   returns "not found" or the call returns "does not exist".
 
 ## The local SDK path
-- Credential helper: `~/.hermes/profiles/indigo/scripts/google_auth.py`
+- Credential helper: `$HERMES_HOME/../indigo/scripts/google_auth.py`
   exposes `get_service(api_name, api_version, scopes, account=...)`.
 - **ALWAYS build the service through `get_service` — do NOT hand-build
   `Credentials` from a cached token file + a separately hardcoded `client_id`.**
-  The cached token files (`~/.hermes/profiles/indigo/google_token.json`,
+  The cached token files (`$HERMES_HOME/../indigo/google_token.json`,
   `<fs-root>/indigo-repo/credentials/google_token.json`) carry a `client_id` that
   does NOT match the <operator> OAuth client (`628032148246-…`). If a script loads
   one of those token files yet constructs
@@ -32,7 +32,7 @@ them returns: `Tool '<name>' does not exist. Available tools: browser_back, ...`
   ```python
   import sys
   from pathlib import Path
-  sys.path.insert(0, str(Path("~/.hermes/profiles/indigo/scripts")))
+  sys.path.insert(0, str(Path("$HERMES_HOME/../indigo/scripts")))
   from google_auth import get_service
   svc = get_service("drive", "v3",
                     ["https://www.googleapis.com/auth/drive"],
@@ -41,7 +41,7 @@ them returns: `Tool '<name>' does not exist. Available tools: browser_back, ...`
   svc.about().get(fields="user").execute()  # smoke test
   ```
 - Run the scan script via `terminal` (cron blocks `execute_code`):
-  `python3 ~/.hermes/profiles/indigo/commons/data/ocas-bower/run_light_scan.py`
+  `python3 $HERMES_HOME/../indigo/commons/data/ocas-bower/run_light_scan.py`
   (NOTE: the script once referenced here, `scripts/bower_drive_sdk_light_scan.py`,
   does NOT exist — do not call it. `run_light_scan.py` uses `get_service`, reads
   the cutoff dynamically from `drive_digest.json` `last_updated`, and honors
