@@ -13,7 +13,7 @@ includes:
 - scripts/**
 metadata:
   author: Indigo Karasu (indigokarasu)
-  version: 1.4.6
+  version: "1.5.0"
   hermes:
     category: utilities
     tags:
@@ -191,6 +191,8 @@ Before running the `modifiedTime` query in `bower.scan.light`, ALWAYS perform a 
 ## Google Drive access
 
 Bower uses Google Drive access for: list files/folders, read file content, move file to folder, rename file/folder, create folder, update file description. Bower never calls delete operations. Phase 1 lists all folders (fast metadata query). Phase 2 processes one folder tree at a time, capturing: id, name, mimeType, parents, modifiedTime, starred, size, trashed, description. Exclude trashed files. Fetch permissions for each folder; if unavailable, set `permissions_available: false` and suppress all move proposals.
+
+**Workspace MCP fallback:** Drive operations prefer the Workspace MCP toolset (`workspace_mcp`) when present. If the Workspace MCP is **absent / unavailable**, fall back gracefully to `google_api.py` (the direct Google API python client that reads credentials via `google_auth.py` → `get_service`). The fallback is seamless: same list/move/rename/create operations, no delete, same `permissions_available` suppression rule. Prefer the python-client fallback over failing the run; log which backend was used in the scan journal.
 
 ## Background tasks
 

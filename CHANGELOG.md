@@ -1,3 +1,8 @@
+## [1.5.0] - 2026-09-16
+
+### Changed
+- **Workspace MCP fallback** — Drive operations fall back gracefully to `google_api.py` (direct Google API client) when the Workspace MCP toolset is absent; same operations, no delete, backend logged in journal.
+
 ## [1.4.5] - 2026-04-26
 
 ### Changed
