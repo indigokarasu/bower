@@ -1,7 +1,7 @@
 # bower
 
 <p align="center">
-<img src="./assets/readme/hero.svg" width="100%" alt="Bower: automatic Google Drive organizer — scans, categorizes, and reorganizes Drive files using personalized preferences.">
+<img src="./assets/readme/hero.jpg" width="100%" alt="Bower: automatic Google Drive organizer — scans, categorizes, and reorganizes Drive files using personalized preferences.">
 </p>
 
 bower — Bower: automatic Google Drive organizer — scans, categorizes, and reorganizes Drive files using personalized preferences.
