@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
   <title id="title">bower</title>
-  <desc id="desc">Glitch / seam header. Indigo field, displaced seam, chromatic-aberrated title.</desc>
+  <desc id="desc">Glitch / seam header. Indigo field, displaced seam, chromatic aberration.</desc>
   <defs>
     <radialGradient id="bg" cx="0.34" cy="0.40" r="0.95" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#1A1230"/>
@@ -24,7 +24,7 @@
   <!-- base field -->
   <rect width="1600" height="900" fill="url(#bg)"/>
 
-  <!-- faint ghost word (depth) -->
+  <!-- faint ghost word (depth texture only, not literal text) -->
   <text x="800" y="560" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="380" font-weight="800" fill="#FFFFFF" opacity="0.035">BOWER</text>
 
   <!-- scattered datamosh blocks -->
@@ -35,6 +35,8 @@
     <rect x="1242" y="700" width="140" height="12" fill="#FF2E63" opacity="0.18"/>
     <rect x="980" y="120" width="60" height="8" fill="#9B7BFF" opacity="0.30"/>
     <rect x="430" y="760" width="110" height="10" fill="#19E3FF" opacity="0.20"/>
+    <rect x="600" y="400" width="80" height="8" fill="#FF2E63" opacity="0.25"/>
+    <rect x="1050" y="350" width="120" height="10" fill="#9B7BFF" opacity="0.30"/>
   </g>
 
   <!-- ===== SEAM 1 (upper fracture) ===== -->
@@ -48,37 +50,16 @@
     <rect x="1320" y="303" width="180" height="9" fill="#7C5CFF" opacity="0.40"/>
   </g>
 
-  <!-- ===== SEAM 2 (lower fracture, subtler) ===== -->
-  <rect x="0" y="624" width="1600" height="22" fill="#120E22"/>
-  <rect x="0" y="634" width="1600" height="2" fill="url(#seam)" opacity="0.7"/>
-  <g opacity="0.4">
-    <rect x="300" y="628" width="120" height="7" fill="#9B7BFF"/>
-    <rect x="860" y="630" width="200" height="7" fill="#7C5CFF"/>
-    <rect x="1180" y="628" width="140" height="7" fill="#19E3FF"/>
+  <!-- ===== SEAM 2 (lower fracture) ===== -->
+  <rect x="0" y="546" width="1600" height="30" fill="#16112A"/>
+  <rect x="0" y="560" width="1600" height="2.5" fill="url(#seam)"/>
+  <g>
+    <rect x="300" y="550" width="180" height="9" fill="#FF2E63" opacity="0.30"/>
+    <rect x="500" y="553" width="140" height="9" fill="#7C5CFF" opacity="0.40"/>
+    <rect x="800" y="550" width="200" height="9" fill="#19E3FF" opacity="0.25"/>
+    <rect x="1100" y="553" width="160" height="9" fill="#9B7BFF" opacity="0.35"/>
   </g>
 
-  <!-- ===== TITLE: chromatic aberration (red / cyan / white) ===== -->
-  <g font-family="Arial, Helvetica, sans-serif" font-size="210" font-weight="800" text-anchor="middle" letter-spacing="6">
-    <text x="793" y="540" fill="#FF2E63" opacity="0.85">bower</text>
-    <text x="807" y="540" fill="#19E3FF" opacity="0.85">bower</text>
-    <text x="800" y="540" fill="#F2F4FB" opacity="0.92">bower</text>
-  </g>
-
-  <!-- subtitle with a torn/glitched slice -->
-  <text x="800" y="612" text-anchor="middle" font-family="'Courier New', monospace" font-size="30" letter-spacing="4" fill="#B9C0D0">automatic Google Drive organizer</text>
-  <rect x="700" y="592" width="86" height="22" fill="#19E3FF" opacity="0.22"/>
-  <rect x="708" y="592" width="86" height="22" fill="#FF2E63" opacity="0.16"/>
-
-  <!-- pipeline status line -->
-  <text x="800" y="700" text-anchor="middle" font-family="'Courier New', monospace" font-size="26" letter-spacing="3" fill="#8A92A6">SCAN - WORK - MINE - ROUTE - COMPACT</text>
-  <text x="800" y="700" text-anchor="middle" font-family="'Courier New', monospace" font-size="26" letter-spacing="3" fill="#19E3FF" opacity="0.30" transform="translate(3,0)">SCAN - WORK - MINE - ROUTE - COMPACT</text>
-
-  <!-- ===== HUD corner labels ===== -->
-  <text x="48" y="60" font-family="'Courier New', monospace" font-size="22" letter-spacing="2" fill="#7C5CFF">OCAS // GOOGLE-DRIVE-ORGANIZER</text>
-  <text x="1552" y="60" text-anchor="end" font-family="'Courier New', monospace" font-size="22" letter-spacing="2" fill="#8A92A6">v1.0.0</text>
-  <text x="48" y="852" font-family="'Courier New', monospace" font-size="20" letter-spacing="1.5" fill="#8A92A6">ADAPTIVE - SELF-IMPROVING</text>
-  <text x="1552" y="852" text-anchor="end" font-family="'Courier New', monospace" font-size="20" letter-spacing="1.5" fill="#6E7689">SIGNAL -> ROUTE -> COMPACT</text>
-
-  <!-- scanline overlay (topmost, subtle) -->
+  <!-- Scanline overlay -->
   <rect width="1600" height="900" fill="url(#scan)" opacity="0.5"/>
 </svg>
