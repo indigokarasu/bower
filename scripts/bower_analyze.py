@@ -169,7 +169,7 @@ def scan_all_files():
             
             folder_id = data.get('folder_id')
             folder_name = data.get('folder_name', '')
-            files = data.get('files', [])
+            files = data.get('children', data.get('files', []))
             
             for file in files:
                 file['_folder_id'] = folder_id
@@ -311,7 +311,7 @@ def build_preference_profile(all_files, folder_by_id, folder_paths, folder_file_
             
             folder_id = data.get('folder_id')
             folder_name = data.get('folder_name', '')
-            files = data.get('files', [])
+            files = data.get('children', data.get('files', []))
             folder_path = folder_paths.get(folder_id, f"/{folder_name}")
             
             # Skip backup/system folders for domain detection
