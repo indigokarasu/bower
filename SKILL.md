@@ -1,4 +1,5 @@
 ---
+warning: 'FALSE TRIGGER RISK: Has had 50% false trigger rate on interactive loads (1/2). Do NOT load for Google Drive organization when the user has not explicitly requested it or when the task is simple folder cleanup — load only when Drive organization is the primary intent and there is clear evidence of organizational mess. Added automatically on 2026-09-21.'
 name: ocas-bower
 license: MIT
 source: https://github.com/<agent-handle>/bower
