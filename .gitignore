@@ -6,3 +6,5 @@ node_modules/
 *.egg-info/
 .env
 .env.local
+*.bak
+*.bak-*

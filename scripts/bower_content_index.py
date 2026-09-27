@@ -33,13 +33,74 @@ installed, no network call, no per-page cost) reads them fine.
   python bower_content_index.py [--native] [--uploaded] [--ocr] [--limit N]
                                  [--budget S] [--dry-run] [--self-test]
 """
+import sys
+
+# --- --help guard -----------------------------------------------------------
+# MUST sit before every import and side effect below. `google_auth_mcp` exists
+# only on the VPS, so on any other box the import raises ModuleNotFoundError
+# and `--help` would die with a traceback instead of printing usage. And with
+# the import in place, an unparsed `--help` used to fall through main() into a
+# LIVE Drive extraction pass -- the single worst outcome for a help probe.
+_HELP = """bower_content_index.py -- extract document CONTENT from Google Drive.
+
+Drive reaches Chronicle as metadata only (name, kind, folder, owner, dates),
+which cannot answer "which document said we'd use quartz countertops". This
+script extracts what files actually SAY, into a separate long-lived database
+(drive.db is rebuilt nightly and would destroy a content column).
+
+Usage:
+  python bower_content_index.py [--native] [--uploaded] [--ocr] [--limit N]
+                                [--budget S] [--dry-run] [--self-test]
+  python bower_content_index.py --help
+
+Pass modes (at least one; --native is the default when none is given):
+  --native       Export Google Docs/Sheets/Slides to text. Fast, no download,
+                 no OCR. This is the default pass.
+  --uploaded     Download and parse uploaded PDFs. Slower and bandwidth-bound;
+                 bounded per run by --budget/--limit so it stays resumable.
+  --ocr          OCR the scanned PDFs the text pass already marked `scanned`
+                 (no text layer). Renders pages with pdftoppm, reads them with
+                 tesseract. An order of magnitude slower per page than the text
+                 pass, which is why it is a separate, later pass.
+
+Options:
+  --limit N        Cap candidates processed this run.
+  --budget S       Wall-clock seconds for this run (default 1800, or the
+                   BOWER_CONTENT_BUDGET env var). Both --limit and --budget
+                   exist so a run can be cut short and RESUMED: candidates are
+                   left in status 'scanned' and picked up next time.
+  --dry-run        Print the first 3 candidates, touch no network, write no
+                   state. Always safe to run.
+  --self-test      Report presence of tesseract/pdftoppm/pdftotext. Always
+                   exits 0 -- a missing tool is a fact to report, not a reason
+                   to fail a run.
+  -h, --help       Show this help and exit 0. Never touches Google Drive.
+
+Environment:
+  BOWER_CONTENT_BUDGET   Default --budget in seconds (default 1800).
+
+Exit codes:
+  0  success (including --dry-run and --self-test)
+  1  one or more documents failed; see the per-document status in
+     drive_content.db (status column: ok / uploaded / ocr / ocr_empty /
+     failed:<reason>)
+  2  bad usage (unknown or missing argument)
+
+Prerequisites (VPS-side): the google_auth_mcp module on sys.path, plus
+tesseract + pdftoppm from poppler for --ocr only. The pure-python candidate
+selection and page-joining logic is covered by test_bower_content_index.py.
+"""
+if __name__ == "__main__" and ("-h" in sys.argv or "--help" in sys.argv):
+    print(_HELP)
+    sys.exit(0)
+
+import argparse
 import glob
 import os
 import re
 import shutil
 import sqlite3
 import subprocess
-import sys
 import tempfile
 import time
 from pathlib import Path
@@ -402,21 +463,48 @@ def run_self_test():
 
 
 def main(argv):
-    limit = None
-    budget = float(os.environ.get("BOWER_CONTENT_BUDGET", "1800"))
-    for i, a in enumerate(argv):
-        if a == "--limit" and i + 1 < len(argv):
-            limit = int(argv[i + 1])
-        if a == "--budget" and i + 1 < len(argv):
-            budget = float(argv[i + 1])
+    # `argv` is the argument list ONLY (no program name) — the `__main__`
+    # block passes sys.argv[1:]. Tests call main(["--dry-run"]) directly, so
+    # this must not slice argv again. Real argument validation: an unknown flag
+    # used to be silently ignored and the run proceeded anyway, so a typo'd
+    # invocation still hit the Drive API and still wrote state. Bad usage is
+    # now exit 2, before any network use.
+    ap = argparse.ArgumentParser(
+        prog="bower_content_index.py", add_help=False,
+        description="Extract document content from Google Drive into "
+                    "drive_content.db.",
+        epilog="Run with --help for the full option reference.")
+    ap.add_argument("--native", action="store_true",
+                    help="export Google Docs/Sheets/Slides (default pass)")
+    ap.add_argument("--uploaded", action="store_true",
+                    help="download and parse uploaded PDFs")
+    ap.add_argument("--ocr", action="store_true",
+                    help="OCR scanned PDFs left in status 'scanned'")
+    ap.add_argument("--limit", type=int, default=None, metavar="N",
+                    help="cap candidates processed this run")
+    ap.add_argument("--budget", type=float, default=None, metavar="S",
+                    help="wall-clock seconds for this run "
+                         "(default 1800 / BOWER_CONTENT_BUDGET)")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="print 3 candidates, no network, no writes")
+    ap.add_argument("--self-test", action="store_true",
+                    help="report tesseract/pdftoppm/pdftotext presence")
+    args, unknown = ap.parse_known_args(argv)
+    if unknown:
+        ap.error("unrecognized arguments: %s" % " ".join(unknown))
 
-    if "--self-test" in argv:
+    limit = args.limit
+    budget = args.budget
+    if budget is None:
+        budget = float(os.environ.get("BOWER_CONTENT_BUDGET", "1800"))
+
+    if args.self_test:
         return run_self_test()
 
-    dry_run = "--dry-run" in argv
-    want_uploaded = "--uploaded" in argv
-    want_ocr = "--ocr" in argv
-    want_native = "--native" in argv or not (want_uploaded or want_ocr)
+    dry_run = args.dry_run
+    want_uploaded = args.uploaded
+    want_ocr = args.ocr
+    want_native = args.native or not (want_uploaded or want_ocr)
 
     rc = 0
     if want_native:
@@ -430,4 +518,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(main(sys.argv[1:]))

@@ -13,9 +13,45 @@ scope for `pytest tests/` (see ../L11_R6_NOTES.md). Run directly:
 
     /usr/bin/python3 -m pytest ops/test_bower_content_index.py -q
 """
+import sys
+
+# --- --help guard -----------------------------------------------------------
+# MUST precede `import pytest`, which is not installed on every box (this one
+# included). Without it, `--help` dies with a ModuleNotFoundError traceback
+# instead of printing usage. Gated on __name__ so it can never fire during a
+# pytest collection pass, where argv belongs to pytest, not to this file.
+if __name__ == "__main__" and ("-h" in sys.argv or "--help" in sys.argv):
+    print("""test_bower_content_index.py -- unit tests for bower_content_index.py.
+
+Covers the pure-Python logic of bower_content_index.py: candidate selection,
+page rendering/joining, the 40-char OCR rule, --budget/--limit stopping, and
+the --dry-run no-side-effect guarantee. Every subprocess call and the Drive
+service are stubbed -- this file touches no network and no real OCR binary.
+
+Usage:
+  /usr/bin/python3 -m pytest test_bower_content_index.py -q
+  /usr/bin/python3 -m pytest test_bower_content_index.py -k ocr -q
+  /usr/bin/python3 -m pytest test_bower_content_index.py -x -q
+
+Options:
+  -h, --help       Show this help and exit 0. Does not require pytest.
+
+Requires pytest. These tests are NOT part of a plugin's `tests/` gate: they
+are VPS-side tooling and out of scope for the plugin test run. This box has
+neither tesseract nor pdftoppm, and no google_auth_mcp module (imported by
+the script under test); both are stubbed at load time, so the suite is
+network-free and tool-free by construction.
+
+Exit codes:
+  0  all tests passed
+  1  at least one test failed
+  5  pytest is not installed (ModuleNotFoundError)
+
+Exit 2 on bad usage is argparse's; pytest owns the rest.""")
+    sys.exit(0)
+
 import importlib.util
 import sqlite3
-import sys
 import types
 from pathlib import Path
 
