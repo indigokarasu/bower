@@ -64,11 +64,11 @@ When invoked interactively, present a two-level menu. See `references/interactiv
 
 Bower keeps Google Drive organized without ever deleting anything. It learns your organizational style from your existing structure, applies domain-native logic where it detects known domains, builds a personalized preference profile, and over time auto-approves patterns you consistently accept. The goal: you go to sleep and wake up to a Drive that looks the way you would have organized it yourself.
 
-**Current status:** Weekly deep-scan cadence established. The Drive holds ~23.7K
+**Current status:** Weekly deep-scan cadence established. The Drive holds ~18.7K
 folders, almost all of them a nested backup/Takeout tree (dominant subtree
-`Archive`, ~9.7K descendants) that is **out of Bower's scope** — Bower
-organizes, never deletes. Only the 6 curated roots (Bookshelf, Archive, Home,
-Projects, Professional, Authenticator Backups, ~516 direct files) are
+`Archive`) that is **out of Bower's scope** — Bower
+organizes, never deletes. Only the 5 curated roots (Bookshelf, Archive, Home,
+Projects, Professional, ~478 direct files) are
 meaningfully in scope, so deep scans are **sampled** (`scan_coverage: 0.5`):
 enumerate all folders once (cached), then sample 300 direct children per
 curated root. For current counts, pending-proposal count, and detected
@@ -177,13 +177,26 @@ Daily light scan at 02:00 PT: `bower.scan.light` → arrival detection → auto-
 The canonical scan scripts live under the indigo profile data dir, **not** the
 skill's own `scripts/`:
 
-- **Light:** `/usr/bin/python3 $HERMES_HOME/../indigo/commons/data/ocas-bower/run_light_scan.py`
-- **Deep (weekly, sampled):** `/usr/bin/python3 $HERMES_HOME/../indigo/commons/data/ocas-bower/deep_scan_sampled.py`
+- **Deep scan (weekly, sampled):** `deep_scan_sampled.py` — NOT full enumeration.
+  It writes one `scans/<folder_id>.json` record per curated root, plus a
+  reserved `scans/__drive_root__.json` record holding files sitting loose at
+  Drive root (those were invisible to analysis before 2026-09-27). It also
+  prunes scan records whose folder is no longer a live root, so a trashed or
+  orphaned subtree stops feeding every future run.
+- **Light scan (two phases, in order):** `light_scan_phase1.py` (structural baseline
+  check, aborts on >15% root drift) then `light_scan_phase2.py` (modifiedTime
+  arrival query). There is no `run_light_scan.py`.
+- **Deep (weekly, sampled):** `deep_scan_sampled.py` — NOT full enumeration.
 
+All three live in `/root/.hermes/profiles/indigo/commons/data/ocas-bower/`.
 Use `/usr/bin/python3` — a stray `python3` on PATH can resolve to a project
 `.venv` that lacks `requests` and produces a *false* `auth_or_build_failed`
 (see Error handling). Never run `scripts/bower_full_scan.py` here; it
-enumerates the full ~24K-folder tree and times out.
+enumerates the full ~26K-folder tree and times out.
+
+Triage (read-only) additionally requires
+`bower_light_triage.py --account jared.zimmerman@gmail.com`; without
+`--account` it silently no-ops on a placeholder account while exiting 0.
 
 Exact commands, credential resolution, output artifacts, and the
 `search_files`-phantom-path trap: `references/scan-execution.md`.

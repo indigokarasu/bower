@@ -29,7 +29,8 @@ and what to do instead. Read the one you need; they are not sequential.
 - [Large Drive founding scans timeout](#large-drive-founding-scans-timeout)
 - [Bundled `scripts/` scan scripts are unsafe for this Drive](#bundled-scripts-scan-scripts-are-unsafe-for-this-drive)
 - [location_outlier move proposals are title-keyword false-positive prone](#location-outlier-move-proposals-are-title-keyword-false-positive-prone)
-- [Weekly deep scan yields 0 NEW proposals when prior ones persist](#weekly-deep-scan-yields-0-new-proposals-when-prior-ones-persist)
+- [Analyzer silently reads 0 files when scan-record key names drift](#analyzer-silently-reads-0-files-when-scan-record-key-names-drift)
+- [Weekly deep scan yields 0 NEW proposals when prior ones persist](#weekly-deep-scan-yields-0-new-proposals-when-priorones-persist)
 - [Stale digest causes permanent drift abort loop](#stale-digest-causes-permanent-drift-abort-loop)
 
 ---
@@ -106,9 +107,83 @@ and what to do instead. Read the one you need; they are not sequential.
 
 — `bower.analyze` flags a file as `location_outlier` when its *name* contains a domain keyword (home/work/project/house) and it sits outside that domain's root. For books in **Bookshelf** this is almost always WRONG: e.g. *"Learn Hawaiian at Home"*, *"American House Styles"*, *"Work Like A Spy"*, *"Project Hail Mary"* are ebooks, not Home/Projects documents. Do NOT auto-apply such proposals. Rule of thumb: never move contents of an already-curated semantic root (Bookshelf, Archive) to another domain based on title-substring matches alone — require file *content/type* or explicit domain-folder membership. (Also seen: duplicate proposals — the same file listed twice, e.g. *Project Hail Mary*. The analyzer should dedupe by `source_id`.) Review the pending queue (`bower.proposals.review`) and reject the false positives before any `bower.apply`.
 
+## `load_feedback_suppressions` must honour the `count` field
+
+— Bulk rejection records in `feedback_log.jsonl` are written as **one line per
+pattern** carrying `count: N` (how many individual proposals were rejected),
+not one line per rejection. A loader that does `suppressions[pattern_key] += 1`
+under-reports suppression by that factor of N. The thresholds in
+`bower_analyze.py` (`>=3` fully suppressed, `==2` low/med suppressed, `==1`
+downgrade) then never fire, so every pattern the user explicitly rejected is
+re-emitted as `pending` on the next analysis run. Confirmed 2026-09-27: 20
+rejections of `move:/Bookshelf:/Projects` counted as 1, and all 16 proposals
+rejected on 2026-09-20 were re-emitted as pending on 2026-09-25. Fix:
+`+= entry.get('count', 1)`.
+**How to spot it:** a `pending` queue whose contents are all proposals already
+rejected — cross-check `proposals.jsonl` per `proposal_id` for an earlier
+`rejected` record. The log is **append-only with last-record-wins semantics**, so
+read effective status by replaying the whole file; a naive "grep the last line"
+misses the newest record. Some older records use `pattern_suppressed` (a
+free-text label) instead of `pattern_key` and are invisible to a key-based
+loader entirely.
+
+## Analyzer silently reads 0 files when scan-record key names drift
+
+— `bower_analyze.py` read the per-folder scan records under the key `files`,
+but `deep_scan_sampled.py` writes them under `children`. Result: every analysis
+run since the sampled scanner was adopted printed `Found 0 files across 0
+folders` and generated 0 proposals, and the run looked "healthy" because 0 new
+proposals is also the normal healthy result. Confirmed 2026-09-27.
+**Detection rule:** compare `files_analyzed` in `analysis_events.jsonl` against
+`total_files_sampled` in `drive_digest.json`. If analysis is 0 while the scan
+sampled hundreds, it is a schema mismatch, not a quiet Drive.
+**Fix:** both readers use `data.get('files') or data.get('children') or []`.
+Any writer/reader pair across scan and analysis must be schema-checked the first
+time a scanner is replaced, and `files_analyzed` should be asserted non-zero on
+a Drive known to have content.
+
 ## Weekly deep scan yields 0 NEW proposals when prior ones persist
 
 — `bower_analyze.py` dedupes against existing `pending`/`approved` proposals, so a routine weekly deep scan legitimately produces 0 new proposals even when 16 are still pending. That is NOT a sign the scan failed. The deliverable of a weekly deep scan is the refreshed `folder_index.json` + `drive_digest.json` (which advances the light-scan `modifiedTime` cutoff) + the still-pending queue — not new proposals. Report "0 new, N pending" as healthy.
+
+## Stale scan records for trashed or orphaned folders are never pruned
+
+— The scanner only ever *rewrites* records for current curated roots; it never
+deletes records for folders that have left that set. A folder that was trashed,
+moved deeper, or orphaned therefore keeps contributing its files to every
+subsequent analysis run, indefinitely. Confirmed 2026-09-27: `Authenticator
+Backups` had been in the Drive trash since 2024-05-26 yet still supplied 3 files
+to every analysis, and an orphaned second `Archive` record dated 2026-08-23 sat
+alongside the live one. This silently inflates `files_analyzed` and can generate
+proposals inside a subtree the user deleted.
+**Detection rule:** `ls scans/` and compare the folder ids to
+`folder_index.json → curated_roots`; any extra id is stale. Cross-check a
+suspicious id with `files().get(...,fields='trashed')` — `trashed: true` confirms
+it. Also check the skill's own prose: a root named in SKILL.md that the Drive
+reports as trashed means the documented root list is stale, not the Drive.
+**Fix:** `deep_scan_sampled.py` prunes any `scans/*.json` whose stem is not a
+current curated-root id (or the reserved `__drive_root__` record) at the end of
+each run.
+
+## Files loose at Drive root are invisible to analysis unless written as a scan record
+
+— `bower.analyze` reads exactly one `scans/<folder_id>.json` record per curated
+root. A file sitting loose at Drive root appeared in `drive_digest.json` as a
+count but in no record, so no run could ever propose a move for it, no matter how
+clearly it was misfiled. Confirmed 2026-09-27: two files had been at root — a
+renovation punch list and a role announcement — and the analyzer reported 0
+proposals while looking perfectly healthy.
+**Detection rule:** compare `root_level_file_count` in `drive_digest.json`
+against the number of files actually reaching analysis. A non-zero root count
+with zero root files in `scans/` means root files are being counted and
+discarded.
+**Fix:** the scanner writes a reserved `scans/__drive_root__.json` record with
+`folder_name: ""`, so `folder_path` resolves to `/` and `classify_file_outlier`
+sees them as `depth_outlier`. Reserved filename (not a Drive id) so a real id
+cannot collide. **Caveat:** the analyzer's outlier rules match a domain by
+*filename keyword*, so a root file with no domain keyword in its name
+("1676", "Linkedin annouce") is detected but generates no move proposal on its
+own — the misfile has to be read and classified, not pattern-matched.
 
 ## Stale digest causes permanent drift abort loop
 

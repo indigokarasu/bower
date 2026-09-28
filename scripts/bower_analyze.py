@@ -51,6 +51,71 @@ FORBIDDEN_MOVE_TYPES = [
     "application/vnd.google-apps.shortcut"
 ]
 
+# JEV adjudicates the folders the keyword vocabulary cannot score. Optional: a
+# missing client or a missing key leaves detect_domain_for_folder on its own
+# rules, which is the pre-JEV behaviour.
+try:
+    import sys as _syst
+    _syst.path.insert(0, '/root/.hermes/skills/jeveer')
+    import jev_client as _jev_client
+except Exception:
+    _jev_client = None
+
+# Minimum API confidence before a JEV domain is used to move files. Moving a
+# file in Drive is awkward to undo, so this is deliberately high and lives in
+# one reviewable place. Tuned 2026-09-27 against jev-1.13.0.
+JEV_DOMAIN_MIN_CONFIDENCE = 0.80
+
+
+def _jev_detect_domain(folder_path, folder_name, files):
+    """One Choice question over DOMAIN_VOCABULARY. Returns a domain or None.
+
+    None means JEV was unavailable or not confident enough, and the caller keeps
+    its own verdict. The vocabulary is sent as the criteria rather than a
+    hand-copied list, so adding a domain here needs no second edit.
+    """
+    if _jev_client is None or not _jev_client.available():
+        return None
+    sample = [
+        f"{f.get('name', '')} {f.get('description', '')}".strip()
+        for f in files[:20]
+        if f.get('mimeType') != 'application/vnd.google-apps.folder'
+    ]
+    state = {
+        'folder_name': folder_name,
+        'folder_path': folder_path,
+        'sample_files': sample,
+    }
+    criteria = {
+        domain: f"Files a person would keep here about {domain}."
+        for domain in DOMAIN_VOCABULARY
+    }
+    criteria['none'] = (
+        'A catch-all: the files have no single coherent subject, or the subject '
+        'is none of the other options.'
+    )
+    answers = _jev_client.system_one(state, {
+        'domain': {
+            'type': 'choice',
+            'instructions': (
+                'Which single subject best describes what a person would store in '
+                'this folder? Judge the files together, not one at a time. Answer '
+                "'none' if the folder has no coherent subject."
+            ),
+            'criteria': criteria,
+        }
+    })
+    if not answers or 'domain' not in answers:
+        return None
+    ans = answers['domain']
+    # .confidence, not the top probability: it accounts for the option count,
+    # so a 9-way near-tie reads as low rather than looking decisive.
+    if float(ans.get('confidence', 0.0)) < JEV_DOMAIN_MIN_CONFIDENCE:
+        return None
+    choice = ans.get('choice')
+    return choice if choice in DOMAIN_VOCABULARY else None
+
+
 def load_config():
     """Load configuration"""
     if CONFIG_PATH.exists():
@@ -95,7 +160,12 @@ def load_feedback_suppressions():
                     entry = json.loads(line)
                     pattern_key = entry.get('pattern_key')
                     if pattern_key:
-                        suppressions[pattern_key] += 1
+                        # Bulk rejection records carry an explicit 'count'
+                        # (one line per pattern summarizing N individual
+                        # rejections). Counting them as 1 under-reports
+                        # suppression and lets fully-rejected patterns be
+                        # re-emitted. Weight by count, defaulting to 1.
+                        suppressions[pattern_key] += entry.get('count', 1)
                 except json.JSONDecodeError:
                     continue
     return suppressions
@@ -182,40 +252,61 @@ def scan_all_files():
     return all_files, folder_file_counts
 
 def detect_domain_for_folder(folder_path, folder_name, files):
-    """Detect domain for a folder based on name and file content"""
+    """Detect domain for a folder based on name and file content.
+
+    Keyword scoring runs first and is kept. JEV is consulted only where the
+    keywords are weak or colliding -- the same "rules first, JEV adjudicates the
+    residue" shape used in ocas-sands/conflict_scan_template.py. Structural
+    guards (generic names, forbidden types) never reach JEV.
+    """
     folder_text = f"{folder_path} {folder_name}".lower()
-    
+
     # Skip if folder name is too generic or system-like
     generic_names = ['documents', 'files', 'data', 'stuff', 'misc', 'temp', 'untitled']
     if folder_name.lower() in generic_names:
         return None, None
-    
+
+    # Word-boundary matching, not `keyword in text`. The substring form put
+    # "old" inside "Goldfish" and filed a pet folder under archive, "lab" inside
+    # "Labrador" filed a dog's records under medical, and "class" inside
+    # "Classical" filed a playlist under education. Boundaries are exact and
+    # free, so they run before any scoring and before any API call.
+    def _hit(keyword, text):
+        return re.search(r'(?<!\w)' + re.escape(keyword) + r'(?!\w)', text) is not None
+
     # Check folder name/path against vocabulary
     domain_scores = defaultdict(int)
     for domain, keywords in DOMAIN_VOCABULARY.items():
         for keyword in keywords:
-            if keyword in folder_text:
+            if _hit(keyword, folder_text):
                 # Stronger signal for exact folder name match
-                if keyword in folder_name.lower():
+                if _hit(keyword, folder_name.lower()):
                     domain_scores[domain] += 5  # Folder name match is very strong signal
                 else:
                     domain_scores[domain] += 2  # Path match is weaker
-    
+
     # Check file names and content
     for file in files[:20]:  # Sample first 20 files
         file_text = f"{file.get('name', '')} {file.get('description', '')}".lower()
         for domain, keywords in DOMAIN_VOCABULARY.items():
             for keyword in keywords:
-                if keyword in file_text:
+                if _hit(keyword, file_text):
                     domain_scores[domain] += 1
-    
+
     if not domain_scores:
+        # No keyword fired. This is exactly where keywords cannot help and a
+        # question is cheap: either the folder is coherent and unlabelled, or it
+        # is a catch-all. JEV distinguishes those two; the keyword path could
+        # only ever return None for both.
+        jev_domain = _jev_detect_domain(folder_path, folder_name, files)
+        if jev_domain:
+            return jev_domain, {'confidence': 'med', 'mode': 'descriptive', 'source': 'jev'}
         return None, None
-    
+
     # Get top domain
     top_domain = max(domain_scores.items(), key=lambda x: x[1])
     domain, score = top_domain
-    
+
     # Require stronger evidence for domain assignment
     if score >= 8:  # Increased threshold
         confidence = "high"
@@ -223,9 +314,14 @@ def detect_domain_for_folder(folder_path, folder_name, files):
         confidence = "med"
     else:
         confidence = "low"
-    
+
     # Only assign domain if we have medium or high confidence
     if confidence == "low":
+        # Weaker than the old threshold but not nothing: ask once. A moving file
+        # is hard to undo, so this needs real evidence, not a hunch.
+        jev_domain = _jev_detect_domain(folder_path, folder_name, files)
+        if jev_domain:
+            return jev_domain, {'confidence': 'med', 'mode': 'descriptive', 'source': 'jev'}
         return None, None
     
     # Determine mode (prescriptive vs descriptive)
