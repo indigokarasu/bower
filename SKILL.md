@@ -251,5 +251,5 @@ Every bundled script accepts `--help` (exit 0) and prints its own usage. Run
 | `bower_read_contents.py` | Read + summarize a folder's contents for deep scan | Bounded per run |
 | `bower_resume_scan.py` | Resume an interrupted deep scan from `scans/` | Source of truth is the `scans/` dir, not a cursor |
 | `bower_full_scan.py` | Bundled full deep scan | **Unsafe on this Drive** — times out on ~24K folders and uses a hardcoded-credential path that triggers `invalid_grant`. Use the sampled script in `commons/data/ocas-bower/` instead |
-| `bower_mem_ingest.py` / `bower_mempalace_ingest.py` | Bower → MemPalace fact ingestion | Files meaningful facts only, never file counts |
+| `bower_mem_ingest.py` | Bower → Chronicle candidate extraction | Emits meaningful user-principal candidates with provenance; never file counts or direct database writes |
 | `test_bower_content_index.py` | Unit tests for the content indexer's pure logic | Needs pytest; network-free by construction |
