@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-Bower → MemPalace ingestion script.
-Extracts MEANINGFUL facts about the operator's life from Bower scan data.
-Only files facts that tell you something real — never file counts or org patterns.
+Bower → Chronicle candidate extraction script.
+Extracts meaningful facts about the operator's life from Bower scan data and writes principal-scoped candidate records for sanctioned Chronicle ingestion. It never writes Chronicle directly and never treats file counts or organization patterns as personal facts.
 """
 
 import json
@@ -82,30 +81,31 @@ def main():
     output = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "facts": facts,
-        "kg_facts": [],
-        "drawer_content": "",
+        "memory_candidates": [],
+        "review_summary": "",
     }
     
-    # Build KG facts from specific findings
-    for health in facts["health"]:
-        signal = health["signal"]
-        if signal == "ucsf":
-            output["kg_facts"].append({"subject": "the operator", "predicate": "medical_provider", "object": "UCSF"})
-        elif signal == "fibroscan":
-            output["kg_facts"].append({"subject": "the operator", "predicate": "requested_medical_procedure", "object": "FibroScan"})
-    
-    for finance in facts["finance"]:
-        signal = finance["signal"]
-        if "mortgage" in signal:
-            output["kg_facts"].append({"subject": "the operator", "predicate": "has_financial_account", "object": "mortgage"})
-        elif "401k" in signal or "ira" in signal or "roth" in signal:
-            output["kg_facts"].append({"subject": "the operator", "predicate": "has_retirement_account", "object": signal})
-    
-    for home in facts["home"]:
-        signal = home["signal"]
-        if "honu hale" in signal:
-            output["kg_facts"].append({"subject": "the operator", "predicate": "home_renovation_project", "object": "Honu Hale"})
-    
+    # Build principal-scoped candidates from specific findings.
+    # Candidates remain reviewable proposals until Chronicle accepts them.
+    for category, items in facts.items():
+        for item in items:
+            output["memory_candidates"].append({
+                "target_principal": "user",
+                "domain": category,
+                "claim_kind": "fact",
+                "claim_state": "inferred",
+                "derivation_type": "normalized",
+                "confidence": 0.6,
+                "claim": {
+                    "signal": item["signal"],
+                    "summary": item["snippet"],
+                },
+                "provenance": {
+                    "source_component": "ocas-bower",
+                    "source_file": item["file"],
+                },
+            })
+
     # Build drawer content — ONLY meaningful facts, NO counts
     lines = [f"## Life Facts Discovered — {output['generated_at'][:10]}"]
     
@@ -118,13 +118,13 @@ def main():
     if not any(facts.values()):
         lines.append("\nNo new meaningful facts found in this scan.")
     
-    output["drawer_content"] = "\n".join(lines)
+    output["review_summary"] = "\n".join(lines)
     
     with open(OUTPUT_FILE, "w") as f:
         json.dump(output, f, indent=2)
     
     print(f"Meaningful facts found: {sum(len(v) for v in facts.values())}")
-    print(f"KG facts to add: {len(output['kg_facts'])}")
+    print(f"Memory candidates: {len(output['memory_candidates'])}")
     for cat, items in facts.items():
         if items:
             print(f"  {cat}: {[f['signal'] for f in items]}")
