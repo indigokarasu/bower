@@ -1,21 +1,19 @@
 name: Repository discoverability bootstrap
 on:
+  workflow_dispatch:
   push:
-    branches: [main]
+    paths:
+      - .github/workflows/discoverability-bootstrap.yml
 permissions:
   contents: write
   issues: write
 jobs:
-  metadata:
+  discoverability:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}
     steps:
-      - name: Repository description and topics
-        run: |
-          gh api --method PATCH "repos/$REPO" -f description='Bower: automatic Google Drive organizer — scans, categorizes, and reorganizes Drive files using personalized preferences.'
-          gh api --method PUT "repos/$REPO/topics" -H "Accept: application/vnd.github+json" -F 'names[]=agent-skills' -F 'names[]=ai-agent' -F 'names[]=automation' -F 'names[]=claude' -F 'names[]=google-drive' -F 'names[]=ocas' -F 'names[]=openclaw' -F 'names[]=organization'
       - name: Standard labels
         continue-on-error: true
         run: |
