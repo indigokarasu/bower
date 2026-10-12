@@ -4,16 +4,13 @@ name: ocas-bower
 license: MIT
 source: https://github.com/<agent-handle>/bower
 description: >-
-  Automatic Google Drive organizer. Use when the user asks to organize, clean up,
-  restructure, or audit their Google Drive, reports their Drive as disorganized,
-  or asks what Bower found / to apply pending Bower proposals. Scans Drive structure
-  and file contents, builds a personalized preference profile, applies domain-specific
-  logic (taxes by year, projects by name, home by system, finance by institution),
-  and executes non-destructive moves, renames, and description writes. Learns
-  organizational style over time and auto-approves consistently accepted patterns.
-  Never deletes files. NOT for web research or document analysis (use Sift), Chronicle
-  ingestion, permission management, or one-off manual folder cleanup that needs no
-  learned preference model.
+  NOT for routine Drive work. Automatic Google Drive organizer - load ONLY
+  when the user explicitly asks to organize, clean up, restructure, or audit
+  their Google Drive, reports it as disorganized, or asks to apply pending
+  Bower proposals. Scheduled/background pipeline. Guard front-loaded to the
+  57-char router window on 2026-10-11 (ocas-bower: 100% (5/5 auto) false-
+  trigger rate). Cron-driven; do not load interactively.
+
 includes:
 - references/**
 - scripts/**
