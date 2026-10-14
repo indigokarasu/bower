@@ -1,5 +1,4 @@
 ---
-warning: 'FALSE TRIGGER RISK: Has had 100% false trigger rate on interactive loads (5/5 auto). Do NOT load for Google Drive organization when the user has not explicitly requested it or when the task is simple folder cleanup — load only when Drive organization is the primary intent and there is clear evidence of organizational mess. Updated 2026-09-25: increased from 50% (1/2) to 100% (5/5).'
 name: ocas-bower
 license: MIT
 source: https://github.com/<agent-handle>/bower
@@ -221,6 +220,45 @@ Apply checklist — every item true before the run may be reported complete:
 ### Undo run
 Read move log records → staleness check → restore `previous_value` → execute reversal → log to `undo_log.jsonl` → record feedback → trigger pattern demotion if auto-approved → write Action Journal.
 
+
+## I/O Example
+
+Input: user asks "What's new in my Drive this week?"
+Flow: `bower.scan.light` → arrival detection → `bower_light_triage.py --account jared.zimmerman@gmail.com --json`.
+Output (abridged):
+```json
+{"run_id":"2026-10-14T02:00","arrivals":12,"proposals":[{"file_id":"...33 chars...","proposal":"move to Projects/","confidence":"high"}]}
+```
+No changes are applied unless quiet mode is on and the pattern is promoted; otherwise proposals stay `pending` for review.
+
+## Error Handling
+
+| Failure | Symptom | Handling |
+|---------|---------|----------|
+| Light scan aborts on drift | `light_scan_phase1.py` exits on >15% root drift | Run a fresh sampled deep scan to re-establish baseline before retrying |
+| Interpreter mismatch | `ModuleNotFoundError: requests` or false `auth_or_build_failed` | Use `/usr/bin/python3`, not a project `.venv` python |
+| Triage no-ops silently | `bower_light_triage.py` exits 0 with zero filings | Add `--account jared.zimmerman@gmail.com`; otherwise it targets a placeholder |
+| Unsafe bundled scan | `scripts/bower_full_scan.py` times out / `invalid_grant` | Use `deep_scan_sampled.py` in `commons/data/ocas-bower/` instead |
+| Missing folder permissions | All move proposals suppressed, description-only suggestions only | Verify scopes; rerun after permission fetch succeeds |
+| Shared-file arrivals | Objects with `parents: null`, `ownedByMe: false` | Filter them out before generating proposals; never actionable |
+| Lost append-only history | `.jsonl` replaced instead of appended | Use `terminal` with `>>`; never `write_file` on logs |
+| Truncated Drive IDs | Wrong file moves / `notFound` | Preserve full 33-character IDs; never truncate |
+| OAuth `invalid_grant` (fatal vs transient) | 401 on every call | Refresh token once; if it persists, re-auth; if only cron fails, check credential path |
+| Analyzer reads 0 files | Proposals empty despite scan records | Scan-record key names drifted; inspect `scans/` JSON and align schema (see `references/analysis_schema.md`) |
+
+## Gotchas
+
+Top non-obvious traps (full list: `references/gotchas.md`, 24 entries):
+
+- Bundled `scripts/bower_full_scan.py` is unsafe on this Drive — use the sampled script in `commons/data/ocas-bower/`.
+- `bower_light_triage.py` silently no-ops without `--account jared.zimmerman@gmail.com` while exiting 0.
+- Light scans miss bulk-moved files unless the structural baseline check runs first.
+- `location_outlier` proposals are title-keyword false positives unless reviewed.
+- `write_file` overwrites `.jsonl` logs; append with `terminal` `>>`.
+- Shared files surface in `modifiedTime` queries but are never actionable.
+- All counts, pending proposals, and domains change over time — read `drive_digest.json` / `proposals.jsonl` rather than trusting numbers in this file.
+
+
 ## Decision model
 
 Read these reference files before the operations they govern:
@@ -245,7 +283,7 @@ Read these reference files before the operations they govern:
 | `references/okrs.md` | When reporting status/trend or reviewing targets; full OKR definitions |
 | `references/storage-layout.md` | Before reading or writing any artifact by path; the full directory structure |
 | `references/interactive-menu.md` | When invoked interactively; the full two-level menu structure |
-| `commons/data/ocas-bower/*.py` (canonical data dir) | The RUNNABLE scan/analyze scripts: `deep_scan_sampled.py` (weekly deep, sampled), `run_light_scan.py` (light), plus artifacts (`folder_index.json`, `scans/`, `proposals.jsonl`, `drive_digest.json`, `evidence.jsonl`). Skill `scripts/` holds stale/unsafe equivalents — see Gotchas. |
+| `commons/data/ocas-bower/*.py` (canonical data dir) | When running scans or resolving artifact paths; runnable scripts + artifacts; bundled `scripts/` are stale. |
 
 ### Scripts
 
