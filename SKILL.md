@@ -1,7 +1,7 @@
 ---
 name: ocas-bower
 license: MIT
-source: https://github.com/<agent-handle>/bower
+source: https://github.com/indigokarasu/bower
 description: >-
   NOT for routine Drive work. Automatic Google Drive organizer - load ONLY
   when the user explicitly asks to organize, clean up, restructure, or audit
